@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension
+         point="robosim.generator">
+      <client
+            class="circus.robocalc.robosim.generator.prism.PRISMGeneratorExecutableExtensionFactory:circus.robocalc.robosim.generator.prism.sim.SimGenerator"
+            folder="prism-gen/sim">
+      </client>
+   </extension>
+
+   
+   	<extension
+         point="org.eclipse.ui.commands">
+      <category
+            id="circus.robocalc.robosim.generator.prism.commands.category"
+            name="SimPRISM">
+      </category>
+      <command
+            categoryId="circus.robocalc.robosim.generator.prism.commands.category"
+            id="circus.robocalc.robosim.generator.prism.commands.compile"
+            name="Generate SimPRISM">
+      </command>
+      <command
+            categoryId="circus.robocalc.robosim.generator.prism.commands.category"
+            id="circus.robocalc.robosim.generator.prism.commands.runCommand"
+            name="Run Assertion">
+      </command>
+      <command
+            categoryId="circus.robocalc.robosim.generator.prism.commands.category"
+            id="circus.robocalc.robosim.generator.prism.commands.runAllCommand"
+            name="Run All Assertions">
+      </command>
+   </extension>
+   
+   <extension
+         point="org.eclipse.ui.handlers">
+      <handler
+            class="circus.robocalc.robosim.generator.prism.PRISMGeneratorExecutableExtensionFactory:circus.robocalc.robosim.generator.prism.handlers.CompileHandler"
+            commandId="circus.robocalc.robosim.generator.prism.commands.compile">
+      </handler>
+      <handler
+            class="circus.robocalc.robosim.generator.prism.PRISMGeneratorExecutableExtensionFactory:circus.robocalc.robosim.generator.prism.handlers.RunAllHandler"
+            commandId="circus.robocalc.robosim.generator.prism.commands.runAllCommand">
+      </handler>
+      <handler
+            class="circus.robocalc.robosim.generator.prism.PRISMGeneratorExecutableExtensionFactory:circus.robocalc.robosim.generator.prism.handlers.RunHandler"
+            commandId="circus.robocalc.robosim.generator.prism.commands.runCommand">
+      </handler>
+   </extension>
+   
+   
+   
+   <extension
+         point="org.eclipse.ui.bindings">
+      <key
+            commandId="circus.robocalc.robosim.generator.prism.commands.compile"
+            contextId="org.eclipse.ui.contexts.window"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="M3+6">
+      </key>
+      <key
+            commandId="circus.robocalc.robosim.generator.prism.commands.runCommand"
+            contextId="org.eclipse.ui.contexts.window"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="M3+7">
+      </key>
+      <key
+            commandId="circus.robocalc.robosim.generator.prism.commands.runAllCommand"
+            contextId="org.eclipse.ui.contexts.window"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="M3+8">
+      </key>
+   </extension>
+   
+   <extension
+         point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="menu:robotool.menu">
+         <menu
+               id="robotool.menu.robosim.prism"
+               label="RoboSim-PRISM"
+               mnemonic="C">
+            <command
+                  commandId="circus.robocalc.robosim.generator.prism.commands.compile"
+                  label="Compile"
+                  style="push"
+                  tooltip="Generates the PRISM semantics">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.prism.commands.runCommand"
+                  label="Run..."
+                  style="push"
+                  tooltip="Runs FDR on the .assertions file and produces a report">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.prism.commands.runAllCommand"
+                  label="Run All"
+                  style="push"
+                  tooltip="Runs FDR on all .assertions files and produces the associated reports">
+            </command>
+         </menu>
+      </menuContribution>
+      <menuContribution
+            locationURI="toolbar:org.eclipse.ui.main.toolbar?after=additions">
+         <toolbar
+               id="circus.robocalc.robosim.generator.prism.toolbars.PRISMToolbar"
+               label="SimPRISM">
+            <control
+                  class="circus.robocalc.robosim.generator.prism.PRISMToolbarLabel">
+            </control>
+            <command
+                  commandId="circus.robocalc.robosim.generator.prism.commands.compile"
+                  icon="icons/compile.png"
+                  id="circus.robocalc.robosim.generator.prism.toolbars.compileCommand"
+                  label="Compile"
+                  tooltip="Compile">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.prism.commands.runCommand"
+                  icon="icons/run.png"
+                  id="circus.robocalc.robosim.generator.prism.toolbars.runCommand"
+                  label="Run"
+                  tooltip="Run...">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.prism.commands.runAllCommand"
+                  icon="icons/runall.png"
+                  id="circus.robocalc.robosim.generator.prism.toolbars.runAllCommand"
+                  label="Run All"
+                  tooltip="Run All">
+            </command>
+         </toolbar>
+      </menuContribution>
+      <menuContribution
+            allPopups="false"
+            locationURI="popup:robotool.contextMenu">
+         <menu
+               id="robotool.contextMenu.robosim.prism"
+               label="SimPRISM">
+            <command
+                  commandId="circus.robocalc.robosim.generator.prism.commands.compile"
+                  label="Compile"
+                  style="push"
+                  tooltip="Generates the PRISM semantics">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.prism.commands.runCommand"
+                  label="Run..."
+                  style="push"
+                  tooltip="Runs FDR on the .assertions file and produces a report">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.prism.commands.runAllCommand"
+                  label="Run All"
+                  style="push"
+                  tooltip="Runs FDR on all .assertions files and produces theassociated reports">
+            </command>
+         </menu>
+      </menuContribution>
+   </extension>
+   <extension
+         point="org.eclipse.ui.preferencePages">
+      <page
+            category="circus.robocalc.robosim.textual.RoboSim"
+            class="circus.robocalc.robosim.generator.prism.preferences.AnalysisPreferencePage"
+            id="circus.robocalc.robosim.generator.prism.preferences.analysis"
+            name="Analysis">
+      </page>
+   </extension>
+   <extension
+         point="org.eclipse.core.expressions.definitions">
+     <definition
+        id="circus.robocalc.robosim.generator.prism.isAssertion">
+     <adapt
+           type="org.eclipse.core.resources.IResource">
+        <test
+              property="org.eclipse.core.resources.extension"
+              value="assertions">
+        </test>
+     </adapt>
+  </definition>
+   </extension>
+
+</plugin>

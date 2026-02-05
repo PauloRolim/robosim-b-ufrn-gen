@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<site>
+   <feature id="circus.robocalc.robosim.generator.prism.feature" version="1.0.0.qualifier">
+      <category name="robosim.generator"/>
+   </feature>
+   <feature id="circus.robocalc.robosim.generator.prism.feature.source" version="1.0.0.qualifier">
+      <category name="robosim.generator.source"/>
+   </feature>
+   <category-def name="robosim.generator" label="RoboSim Generator"/>
+   <category-def name="robosim.generator.source" label="RoboSim Generator (Source)"/>
+   <repository-reference location="https://download.eclipse.org/modeling/tmf/xtext/updates/composite/releases/" enabled="true" />
+</site>
