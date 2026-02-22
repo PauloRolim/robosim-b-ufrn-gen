@@ -10,6 +10,6 @@
 		</attributes>
 	</classpathentry>
 	<classpathentry kind="con" path="org.eclipse.pde.core.requiredPlugins"/>
-	<classpathentry kind="lib" path="libs/json-20171018.jar"/>
+	<classpathentry kind="lib" path="C:/RoboTool_new/tradutor-plugin/robosim-b-ufrn-gen/json-20171018.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

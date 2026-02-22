@@ -10,7 +10,7 @@
  * Contributors:
  *   Alvaro Miyazawa - initial definition
  ********************************************************************************/
-package circus.robocalc.robosim.generator.prism;
+package circus.robocalc.robosim.generator.cssp;
 
 import java.util.Collections;
 import java.util.Map;
@@ -33,7 +33,7 @@ import circus.robocalc.robochart.textual.RoboChartRuntimeModule;
 public class Activator extends AbstractUIPlugin {
 	
     // The plug-in ID
-    public static final String PLUGIN_ID = "circus.robocalc.robosim.generator.prism";
+    public static final String PLUGIN_ID = "circus.robocalc.robosim.generator.cssp";
     // TODO: Do we need the RoboChart textual here for RoboSim?
     public static final String CIRCUS_ROBOCALC_ROBOCHART_TEXTUAL_ROBOCHART = "circus.robocalc.robochart.textual.RoboChart";
     public static final String CIRCUS_ROBOCALC_ROBOSIM_TEXTUAL_ROBOSIM = "circus.robocalc.robosim.textual.RoboSim";

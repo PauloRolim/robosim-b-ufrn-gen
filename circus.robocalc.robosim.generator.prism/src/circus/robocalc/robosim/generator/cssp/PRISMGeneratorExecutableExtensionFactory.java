@@ -9,7 +9,7 @@
  *
  ********************************************************************************/
 
-package circus.robocalc.robosim.generator.prism;
+package circus.robocalc.robosim.generator.cssp;
 
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.xtext.ui.guice.AbstractGuiceAwareExecutableExtensionFactory;

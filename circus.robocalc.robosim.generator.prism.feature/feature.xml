@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <feature
-      id="circus.robocalc.robosim.generator.prism.feature"
-      label="RoboSim PRISM Generator"
+      id="circus.robocalc.robosim.generator.cssp.feature"
+      label="RoboSim CSSP Generator"
       version="1.0.0.qualifier"
       provider-name="RoboCalc Project">
 
    <description url="https://www.cs.york.ac.uk/robostar/robotool/">
-      This feature includes plugins that provide the PRISM generator
+      This feature includes plugins that provide the CSSP generator
 of RoboSim.
    </description>
 

@@ -11,7 +11,7 @@
  *   Alvaro Miyazawa - initial definition
  ********************************************************************************/
 
-package circus.robocalc.robosim.generator.prism;
+package circus.robocalc.robosim.generator.cssp;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.RowLayout;
@@ -39,7 +39,7 @@ public class PRISMToolbarLabel extends WorkbenchWindowControlContribution {
 	    cmp.setLayout(rl);
 	    
 		Label label = new Label( cmp, SWT.NONE );
-		label.setText( "SimPRISM" );
+		label.setText( "SimCSSP" );
 		return cmp;
 		
 	}
