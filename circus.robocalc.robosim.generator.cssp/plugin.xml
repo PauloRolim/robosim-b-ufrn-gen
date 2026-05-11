@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension
+         point="robosim.generator">
+      <client
+            class="circus.robocalc.robosim.generator.cssp.PRISMGeneratorExecutableExtensionFactory:circus.robocalc.robosim.generator.cssp.sim.SimGenerator"
+            folder="cssp-gen/sim">
+      </client>
+   </extension>
+
+   
+   	<extension
+         point="org.eclipse.ui.commands">
+      <category
+            id="circus.robocalc.robosim.generator.cssp.commands.category"
+            name="SimCSSP">
+      </category>
+      <command
+            categoryId="circus.robocalc.robosim.generator.cssp.commands.category"
+            id="circus.robocalc.robosim.generator.cssp.commands.compile"
+            name="Generate SimCSSP">
+      </command>
+      <command
+            categoryId="circus.robocalc.robosim.generator.cssp.commands.category"
+            id="circus.robocalc.robosim.generator.cssp.commands.runCommand"
+            name="Run Assertion">
+      </command>
+      <command
+            categoryId="circus.robocalc.robosim.generator.cssp.commands.category"
+            id="circus.robocalc.robosim.generator.cssp.commands.runAllCommand"
+            name="Run All Assertions">
+      </command>
+   </extension>
+   
+   <extension
+         point="org.eclipse.ui.handlers">
+      <handler
+            class="circus.robocalc.robosim.generator.cssp.PRISMGeneratorExecutableExtensionFactory:circus.robocalc.robosim.generator.cssp.handlers.CompileHandler"
+            commandId="circus.robocalc.robosim.generator.cssp.commands.compile">
+      </handler>
+      <handler
+            class="circus.robocalc.robosim.generator.cssp.PRISMGeneratorExecutableExtensionFactory:circus.robocalc.robosim.generator.cssp.handlers.RunAllHandler"
+            commandId="circus.robocalc.robosim.generator.cssp.commands.runAllCommand">
+      </handler>
+      <handler
+            class="circus.robocalc.robosim.generator.cssp.PRISMGeneratorExecutableExtensionFactory:circus.robocalc.robosim.generator.cssp.handlers.RunHandler"
+            commandId="circus.robocalc.robosim.generator.cssp.commands.runCommand">
+      </handler>
+   </extension>
+   
+   
+   
+   <extension
+         point="org.eclipse.ui.bindings">
+      <key
+            commandId="circus.robocalc.robosim.generator.cssp.commands.compile"
+            contextId="org.eclipse.ui.contexts.window"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="M3+6">
+      </key>
+      <key
+            commandId="circus.robocalc.robosim.generator.cssp.commands.runCommand"
+            contextId="org.eclipse.ui.contexts.window"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="M3+7">
+      </key>
+      <key
+            commandId="circus.robocalc.robosim.generator.cssp.commands.runAllCommand"
+            contextId="org.eclipse.ui.contexts.window"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            sequence="M3+8">
+      </key>
+   </extension>
+   
+   <extension
+         point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="menu:robotool.menu">
+         <menu
+               id="robotool.menu.robosim.cssp"
+               label="RoboSim-CSSP"
+               mnemonic="B">
+            <command
+                  commandId="circus.robocalc.robosim.generator.cssp.commands.compile"
+                  label="Compile"
+                  style="push"
+                  tooltip="Generates the CSSP semantics">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.cssp.commands.runCommand"
+                  label="Run..."
+                  style="push"
+                  tooltip="Runs FDR on the .assertions file and produces a report">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.cssp.commands.runAllCommand"
+                  label="Run All"
+                  style="push"
+                  tooltip="Runs FDR on all .assertions files and produces the associated reports">
+            </command>
+         </menu>
+      </menuContribution>
+      <menuContribution
+            locationURI="toolbar:org.eclipse.ui.main.toolbar?after=additions">
+         <toolbar
+               id="circus.robocalc.robosim.generator.cssp.toolbars.CSSPToolbar"
+               label="SimCSSP">
+            <control
+                  class="circus.robocalc.robosim.generator.cssp.CSSPToolbarLabel">
+            </control>
+            <command
+                  commandId="circus.robocalc.robosim.generator.cssp.commands.compile"
+                  icon="icons/compile.png"
+                  id="circus.robocalc.robosim.generator.cssp.toolbars.compileCommand"
+                  label="Compile"
+                  tooltip="Compile">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.cssp.commands.runCommand"
+                  icon="icons/run.png"
+                  id="circus.robocalc.robosim.generator.cssp.toolbars.runCommand"
+                  label="Run"
+                  tooltip="Run...">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.cssp.commands.runAllCommand"
+                  icon="icons/runall.png"
+                  id="circus.robocalc.robosim.generator.cssp.toolbars.runAllCommand"
+                  label="Run All"
+                  tooltip="Run All">
+            </command>
+         </toolbar>
+      </menuContribution>
+      <menuContribution
+            allPopups="false"
+            locationURI="popup:robotool.contextMenu">
+         <menu
+               id="robotool.contextMenu.robosim.cssp"
+               label="SimCSSP">
+            <command
+                  commandId="circus.robocalc.robosim.generator.cssp.commands.compile"
+                  label="Compile"
+                  style="push"
+                  tooltip="Generates the CSSP semantics">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.cssp.commands.runCommand"
+                  label="Run..."
+                  style="push"
+                  tooltip="Runs FDR on the .assertions file and produces a report">
+            </command>
+            <command
+                  commandId="circus.robocalc.robosim.generator.cssp.commands.runAllCommand"
+                  label="Run All"
+                  style="push"
+                  tooltip="Runs FDR on all .assertions files and produces theassociated reports">
+            </command>
+         </menu>
+      </menuContribution>
+   </extension>
+   <extension
+         point="org.eclipse.ui.preferencePages">
+      <page
+            category="circus.robocalc.robosim.textual.RoboSim"
+            class="circus.robocalc.robosim.generator.cssp.preferences.AnalysisPreferencePage"
+            id="circus.robocalc.robosim.generator.cssp.preferences.analysis"
+            name="Analysis">
+      </page>
+   </extension>
+   <extension
+         point="org.eclipse.core.expressions.definitions">
+     <definition
+        id="circus.robocalc.robosim.generator.cssp.isAssertion">
+     <adapt
+           type="org.eclipse.core.resources.IResource">
+        <test
+              property="org.eclipse.core.resources.extension"
+              value="assertions">
+        </test>
+     </adapt>
+  </definition>
+   </extension>
+
+</plugin>

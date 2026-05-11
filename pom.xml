@@ -9,13 +9,13 @@ SPDX-License-Identifier: EPL-2.0
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>circus.robocalc.robosim.generator.prism</groupId>
+	<groupId>circus.robocalc.robosim.generator.cssp</groupId>
 	<version>1.0.0-SNAPSHOT</version>
-	<artifactId>circus.robocalc.robosim.generator.prism.parent</artifactId>
+	<artifactId>circus.robocalc.robosim.generator.cssp.parent</artifactId>
 	<packaging>pom</packaging>
 
 	<properties>
-		<xtextVersion>2.18.0</xtextVersion>
+		<xtextVersion>2.35.0</xtextVersion>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.compiler.source>8</maven.compiler.source>
 		<maven.compiler.target>8</maven.compiler.target>
@@ -26,12 +26,12 @@ SPDX-License-Identifier: EPL-2.0
 		<moduleProperties></moduleProperties>
 		<systemProperties></systemProperties>
 		<tycho.testArgLine></tycho.testArgLine>
-		<eclipse-repo.url>http://download.eclipse.org/releases/2019-03</eclipse-repo.url>
+		<eclipse-repo.url>https://download.eclipse.org/releases/2022-03</eclipse-repo.url>
 	</properties>
 	<modules>
-		<module>circus.robocalc.robosim.generator.prism</module>
-		<module>circus.robocalc.robosim.generator.prism.feature</module>
-		<module>circus.robocalc.robosim.generator.prism.update</module>		
+		<module>circus.robocalc.robosim.generator.cssp</module>
+		<module>circus.robocalc.robosim.generator.cssp.feature</module>
+		<module>circus.robocalc.robosim.generator.cssp.update</module>		
 	</modules>
 	<dependencyManagement>
 		<dependencies>
@@ -280,57 +280,57 @@ SPDX-License-Identifier: EPL-2.0
 		</pluginManagement>
 	</build>
 	<repositories>
-		<repository>
-            <id>eclipse-release</id>
-            <url>${eclipse-repo.url}</url>
-            <layout>p2</layout>
-        </repository>
-		<repository>
-            <id>xtext</id>
-            <url>http://download.eclipse.org/modeling/tmf/xtext/updates/</url>
-            <layout>p2</layout>
-        </repository>
-		<repository>
-            <id>assertions</id>
-            <url>https://www.cs.york.ac.uk/robostar/robotool/assertions/update/</url>
-            <layout>p2</layout>
-        </repository>
-		<repository>
-            <id>robochart-metamodel</id>
-            <url>https://www.cs.york.ac.uk/robostar/robotool/metamodel/update/</url>
-            <layout>p2</layout>
-        </repository>
-        <repository>
-            <id>robosim-metamodel</id>
-            <url>https://www.cs.york.ac.uk/robostar/robotool/robosim-metamodel/update/</url>
-            <layout>p2</layout>
-        </repository>
-		<repository>
-            <id>robochart-textual</id>
-            <url>https://www.cs.york.ac.uk/robostar/robotool/textual/update/</url>
-            <layout>p2</layout>
-        </repository>
-        <repository>
-            <id>robosim-textual</id>
-            <url>https://www.cs.york.ac.uk/robostar/robotool/robosim-textual/update/</url>
-            <layout>p2</layout>
-        </repository>
-        <repository>
-            <id>robosim-assertions</id>
-            <url>https://www.cs.york.ac.uk/robostar/robotool/robosim-assertions/update/</url>
-            <layout>p2</layout>
-        </repository>  
-		<repository>
-			<id>codehaus-snapshots</id>
-			<name>disable dead 'Codehaus Snapshots' repository, see https://bugs.eclipse.org/bugs/show_bug.cgi?id=481478</name>
-			<url>http://nexus.codehaus.org/snapshots/</url>
-			<releases>
-				<enabled>false</enabled>
-			</releases>
-			<snapshots>
-				<enabled>false</enabled>
-			</snapshots>
+	    <repository>
+	        <id>eclipse-release</id>
+	        <url>${eclipse-repo.url}</url>
+	        <layout>p2</layout>
+	    </repository>
+	    <repository>
+    		<id>xtext</id>
+    		<url>https://download.eclipse.org/modeling/tmf/xtext/updates/</url>
+    		<layout>p2</layout>
 		</repository>
+	    <repository>
+	        <id>assertions</id>
+	        <url>https://www.cs.york.ac.uk/robostar/robotool/assertions/update/</url>
+	        <layout>p2</layout>
+	    </repository>
+	    <repository>
+	        <id>robochart-metamodel</id>
+	        <url>https://www.cs.york.ac.uk/robostar/robotool/metamodel/update/</url>
+	        <layout>p2</layout>
+	    </repository>
+	    <repository>
+	        <id>robosim-metamodel</id>
+	        <url>https://www.cs.york.ac.uk/robostar/robotool/robosim-metamodel/update/</url>
+	        <layout>p2</layout>
+	    </repository>
+	    <repository>
+	        <id>robochart-textual</id>
+	        <url>https://www.cs.york.ac.uk/robostar/robotool/textual/update/</url>
+	        <layout>p2</layout>
+	    </repository>
+	    <repository>
+	        <id>robosim-textual</id>
+	        <url>https://www.cs.york.ac.uk/robostar/robotool/robosim-textual/update/</url>
+	        <layout>p2</layout>
+	    </repository>
+	    <repository>
+	        <id>robosim-assertions</id>
+	        <url>https://www.cs.york.ac.uk/robostar/robotool/robosim-assertions/update/</url>
+	        <layout>p2</layout>
+	    </repository>
+	    <repository>
+	        <id>codehaus-snapshots</id>
+	        <name>disable dead 'Codehaus Snapshots' repository, see https://bugs.eclipse.org/bugs/show_bug.cgi?id=481478</name>
+	        <url>http://nexus.codehaus.org/snapshots/</url>
+	        <releases>
+	            <enabled>false</enabled>
+	        </releases>
+	        <snapshots>
+	            <enabled>false</enabled>
+	        </snapshots>
+	    </repository>
 	</repositories>
 	<pluginRepositories>
 		<pluginRepository>
