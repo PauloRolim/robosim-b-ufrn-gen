@@ -1,0 +1,29 @@
+Sempre que alterar o arquivo do tadutor rodar os seguintes comandos:
+
+mvn clean package -DskipTests
+montar-lib.bat   
+compilar-gui.bat
+gui.bat               
+
+
+Arquitetura da Interface:
+
+robosim-b-ufrn-gen/
+├── .mvn/jvm.config              ← --add-opens para Java 17+
+├── pom.xml                      ← parent POM corrigido
+├── circus.robocalc.robosim.generator.cssp/
+│   ├── META-INF/MANIFEST.MF     ← Main-Class adicionado
+│   ├── src/.../
+│   │   ├── Main.java            ← CLI standalone
+│   │   ├── TraductorService.java← Lógica de tradução
+│   │   ├── GuiApp.java.gui      ← GUI (compilada à parte)
+│   │   └── sim/SimGenerator.xtend
+│   └── pom.xml                  ← xtext-version 2.35.0
+├── lib/                         ← JARs prontos pra execução
+│   ├── circus.robocalc.robosim.generator.cssp-1.0.0-SNAPSHOT.jar
+│   ├── GuiApp.jar
+│   └── (centenas de dependências OSGi)
+├── montar-lib.bat               ← Coleta JARs do .m2
+├── compilar-gui.bat             ← Compila GuiApp com JavaFX
+├── gui.bat                      ← Roda a interface
+└── traduzir.bat                 ← CLI (uso opcional)

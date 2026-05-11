@@ -1,0 +1,23 @@
+IMPLEMENTATION
+    user_ctx_i
+REFINES
+    user_ctx
+SEES
+  	    g_types
+VALUES
+INIT = 0;
+EXEC_1 = 1;
+EXEC_2 = 2;
+EXEC_3 = 3;
+FINAL = 4;
+st_READ_INPUTS = 0;
+st_STATE_MACHINE = 1;
+st_WRITE_OUTPUTS = 2;
+st_TIME = 3;
+cycle_unit = 1000;
+SimCMovement_cycleDef = 1;
+SimSMovement_cycleDef = 1;
+SimSMovement_lv = TRUE; 
+SimSMovement_av = TRUE; 
+SimSMovement_Pi = //Set a number greater than zero
+END

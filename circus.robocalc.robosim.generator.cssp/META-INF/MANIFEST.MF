@@ -35,5 +35,6 @@ Import-Package: org.apache.log4j;version="1.2.15"
 Bundle-ActivationPolicy: lazy
 Export-Package: circus.robocalc.robosim.generator.cssp
 Bundle-ClassPath: libs/json-20171018.jar,
+ libs/jsr305-3.0.2.jar,
  .
 Main-Class: circus.robocalc.robosim.generator.cssp.Main

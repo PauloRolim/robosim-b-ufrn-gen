@@ -1,0 +1,409 @@
+IMPLEMENTATION
+	logic_i
+ 		
+REFINES
+ 	logic
+SEES
+ 	g_types,
+ 	g_operators,
+ 	io_constants,
+ 	lchip_interface,
+ 	user_ctx,
+ 	inputs
+
+CONCRETE_VARIABLES
+board_0_O1,
+board_0_O2,
+first_time,
+SM_Machine_1_state,
+SM_Machine_2_state,
+cycle_timer,
+cycle_state,
+o_output_mch_1_oo, 
+o_output_mch_2_oo,
+i_input_mch_1, 
+i_input_mch_2,
+Machine_1_com_var,
+Machine_2_com_var
+
+INVARIANT 
+board_0_O1 : uint8_t &
+board_0_O2 : uint8_t &
+first_time: BOOL &
+SM_Machine_1_state : uint32_t &
+SM_Machine_1_state : {INIT, FINAL, EXEC_1, EXEC_2} &
+SM_Machine_2_state : uint32_t &
+SM_Machine_2_state : {INIT, FINAL, EXEC_1, EXEC_2, EXEC_3} &
+cycle_timer: uint32_t &
+cycle_state: uint8_t &
+cycle_state: {st_READ_INPUTS, st_STATE_MACHINE, st_WRITE_OUTPUTS, st_TIME} &
+o_output_mch_1_oo : uint8_t &
+o_output_mch_2_oo : uint8_t &
+i_input_mch_1 : uint8_t &
+i_input_mch_2 : uint8_t &
+Machine_1_com_var : uint8_t &
+Machine_2_com_var : uint8_t
+
+INITIALISATION
+    
+board_0_O1 := IO_OFF;
+board_0_O2 := IO_OFF;
+first_time:= TRUE;
+cycle_timer := 0;
+cycle_state := st_READ_INPUTS;
+SM_Machine_1_state := INIT;
+SM_Machine_2_state := INIT;
+o_output_mch_1_oo := IO_OFF; 
+o_output_mch_2_oo := IO_OFF;
+i_input_mch_1 := IO_OFF; 
+i_input_mch_2 := IO_OFF;
+Machine_1_com_var := IO_OFF;
+Machine_2_com_var := IO_OFF
+
+LOCAL_OPERATIONS
+
+execute_model_cycle =
+PRE cycle_state = st_TIME
+THEN
+first_time :: BOOL ||
+cycle_timer :: uint32_t ||
+cycle_state :: uint32_t ||
+SM_Machine_1_state :: uint32_t ||
+SM_Machine_2_state :: uint32_t ||
+i_input_mch_1 :: uint8_t ||
+i_input_mch_2 :: uint8_t ||
+o_output_mch_1_oo :: uint8_t ||
+o_output_mch_2_oo :: uint8_t ||
+Machine_1_com_var :: uint8_t ||
+Machine_2_com_var :: uint8_t
+END;
+
+SM_Machine_1 =
+PRE cycle_state = st_STATE_MACHINE
+THEN
+cycle_state :: uint32_t ||
+SM_Machine_1_state :: uint32_t ||
+Machine_1_com_var :: uint8_t ||
+o_output_mch_1_oo :: uint8_t
+END;
+
+SM_Machine_2 =
+PRE cycle_state = st_STATE_MACHINE
+THEN
+cycle_state :: uint32_t ||
+SM_Machine_2_state :: uint32_t ||
+Machine_2_com_var :: uint8_t ||
+o_output_mch_2_oo :: uint8_t
+END;
+
+read_model_inputs =
+PRE cycle_state = st_READ_INPUTS
+THEN
+cycle_state :: uint32_t ||
+i_input_mch_1 :: uint8_t ||
+i_input_mch_2 :: uint8_t
+END;
+
+read_i_input_mch_1 =
+PRE cycle_state = st_READ_INPUTS
+THEN
+    i_input_mch_1 :: uint8_t
+END;
+read_i_input_mch_2 =
+PRE cycle_state = st_READ_INPUTS
+THEN
+    i_input_mch_2 :: uint8_t
+END;
+
+write_model_outputs =
+PRE cycle_state = st_WRITE_OUTPUTS
+THEN
+board_0_O1      :: uint8_t ||
+board_0_O2      :: uint8_t ||
+cycle_state     :: uint8_t
+END;
+
+write_o_output_mch_1 =
+PRE cycle_state = st_WRITE_OUTPUTS
+THEN  
+board_0_O1  :: uint8_t ||
+board_0_O2  :: uint8_t ||
+cycle_state :: uint8_t
+END;
+
+write_o_output_mch_1_oo =
+PRE cycle_state = st_WRITE_OUTPUTS
+THEN
+   board_0_O1 :: uint8_t
+END;
+write_o_output_mch_2_oo =
+PRE cycle_state = st_WRITE_OUTPUTS
+THEN
+   board_0_O2 :: uint8_t
+END;
+
+output_mch_1(l_oo) =
+PRE l_oo:BOOL
+THEN
+    o_output_mch_1_oo :: uint8_t
+END;
+
+controller_CPD =
+PRE cycle_state = st_STATE_MACHINE
+THEN
+    Machine_1_com_var :: uint8_t ||
+    Machine_2_com_var :: uint8_t
+END;
+
+elapsed <-- since(timer) =
+PRE timer:uint32_t & elapsed:uint32_t
+THEN
+	elapsed::uint32_t
+END;
+
+result <-- land(pp,qq) =
+PRE pp:BOOL & qq:BOOL & result:BOOL
+THEN
+    result::BOOL
+END;
+
+result <-- lor(pp,qq) = 
+PRE pp:BOOL & qq:BOOL & result:BOOL
+THEN
+ 	result::BOOL
+END;
+
+result <-- lnot(pp) = 
+PRE pp:BOOL & result:BOOL
+THEN
+ 	result::BOOL
+END;
+
+tock =
+BEGIN
+ 	skip
+END
+
+OPERATIONS
+
+user_logic = 
+BEGIN
+    IF first_time = TRUE THEN 
+       cycle_timer <-- get_ms_tick; 
+       execute_model_cycle;
+       cycle_state:= st_READ_INPUTS;
+       first_time := FALSE
+
+    ELSE
+ 	    VAR time_elapsed, cycle_duration IN 
+
+            time_elapsed:(time_elapsed:uint32_t);
+ 	        cycle_duration:(cycle_duration:uint32_t);
+ 		    time_elapsed <-- since(cycle_timer);
+ 		    cycle_duration := mul_uint32(AndMachine_cycleDef,cycle_unit);
+ 		    
+ 		    IF (cycle_duration <= time_elapsed) THEN
+ 		        cycle_timer <-- get_ms_tick;
+ 		        execute_model_cycle;
+ 		        cycle_state:= st_READ_INPUTS;
+ 		        tock
+ 		    END
+ 		END
+ 	END
+END;
+
+SM_Machine_1 =
+BEGIN
+IF SM_Machine_1_state = INIT THEN
+ SM_Machine_1_state:= EXEC_1
+ELSIF SM_Machine_1_state = EXEC_1 THEN
+VAR guard_1
+IN
+guard_1:(guard_1:BOOL);
+guard_1 := bool(i_input_mch_1 = IO_ON);
+IF (guard_1 = TRUE) THEN
+output_mch_1(Machine_1_OUT);
+Machine_1_com_var := IO_ON;
+SM_Machine_1_state:= EXEC_2
+END
+END
+ELSIF SM_Machine_1_state = EXEC_2 THEN
+VAR guard_1, guard_2
+IN
+guard_1:(guard_1:BOOL);
+guard_2:(guard_2:BOOL);
+guard_1 := bool(i_input_mch_1 = IO_ON);
+guard_2 <-- lnot(guard_1);
+IF (guard_2 = TRUE) THEN
+output_mch_1(FALSE);
+Machine_1_com_var := IO_OFF;
+SM_Machine_1_state:= EXEC_1
+END
+END
+END;
+cycle_state := st_WRITE_OUTPUTS
+END;
+
+SM_Machine_2 =
+BEGIN
+IF SM_Machine_2_state = INIT THEN
+ SM_Machine_2_state:= EXEC_1
+ELSIF SM_Machine_2_state = EXEC_1 THEN
+VAR guard_1, guard_2,
+guard_result_1
+IN
+guard_1:(guard_1:BOOL);
+guard_2:(guard_2:BOOL);
+guard_result_1:(guard_result_1:BOOL);
+guard_1 := bool(Machine_2_com_var = IO_ON);
+guard_2 := bool(i_input_mch_2 = IO_ON);
+guard_result_1 <-- land(guard_1, guard_2);
+IF (guard_result_1 = TRUE) THEN
+output_mch_2(Machine_2_OUT);
+SM_Machine_2_state:= EXEC_2
+END
+END
+ELSIF SM_Machine_2_state = EXEC_2 THEN
+VAR guard_1, guard_2, guard_3, guard_4, guard_5, guard_6,
+guard_result_1, guard_result_2
+IN
+guard_1:(guard_1:BOOL);
+guard_2:(guard_2:BOOL);
+guard_3:(guard_3:BOOL);
+guard_4:(guard_4:BOOL);
+guard_5:(guard_5:BOOL);
+guard_6:(guard_6:BOOL);
+guard_result_1:(guard_result_1:BOOL);
+guard_result_2:(guard_result_2:BOOL);
+guard_1 := bool(Machine_2_com_var = IO_ON);
+guard_2 <-- lnot(guard_1);
+guard_3 := bool(i_input_mch_2 = IO_ON);
+guard_4 := bool(Machine_2_com_var = IO_ON);
+guard_5 := bool(i_input_mch_2 = IO_ON);
+guard_6 <-- lnot(guard_5);
+guard_result_1 <-- land(guard_2, guard_3);
+guard_result_2 <-- land(guard_4, guard_6);
+IF (guard_result_1 = TRUE) THEN
+output_mch_2(FALSE);
+SM_Machine_2_state:= EXEC_1
+ELSIF (guard_result_2 = TRUE) THEN
+output_mch_2(FALSE);
+SM_Machine_2_state:= EXEC_1
+END
+END
+END;
+cycle_state := st_WRITE_OUTPUTS
+END;
+
+execute_model_cycle =
+BEGIN
+read_model_inputs;
+SM_Machine_1;
+SM_Machine_2;
+controller_CPD;
+write_model_outputs
+END;
+
+read_model_inputs =
+BEGIN	    
+    cycle_state := st_STATE_MACHINE; 
+    read_i_input_mch_1 
+END;
+
+read_i_input_mch_1 =
+BEGIN
+    i_input_mch_1 <-- get_board_0_I1
+END;
+
+write_model_outputs =
+BEGIN
+cycle_state := st_TIME;
+write_o_output_mch_1;
+write_o_output_mch_2
+END;
+
+write_o_output_mch_1 =
+BEGIN
+write_o_output_mch_1_oo
+END;
+
+write_o_output_mch_1_oo =
+BEGIN
+    board_0_O1 := o_output_mch_1_oo
+END;
+
+write_o_output_mch_2_oo =
+BEGIN
+    board_0_O2 := o_output_mch_2_oo
+END;
+
+
+output_mch_1(l_oo) =
+BEGIN
+    IF l_oo = TRUE
+    THEN
+        o_output_mch_1_oo := IO_ON
+    ELSE
+        o_output_mch_1_oo := IO_OFF
+    END
+END;
+
+controller_CPD =
+BEGIN
+    Machine_2_com_var := Machine_1_com_var
+END;
+
+elapsed <-- since(timer) =
+BEGIN
+     elapsed:(elapsed:uint32_t);
+     VAR local_time IN 
+         local_time:(local_time:uint32_t);
+         local_time <-- get_ms_tick;
+        elapsed := sub_uint32(local_time, timer)
+     END
+END;
+
+result <-- land(pp,qq) =
+BEGIN
+    result := FALSE;
+    IF (pp = TRUE) THEN
+        IF (qq = TRUE) THEN
+            result := TRUE
+        END
+    END
+END;
+
+result <-- lor(pp,qq) =
+BEGIN
+    result := TRUE;
+    IF (pp = FALSE) THEN 
+        IF (qq = FALSE) THEN
+            result := FALSE
+        END
+    END
+END;
+
+result <-- lnot(pp) =
+BEGIN
+result := FALSE;
+    IF (pp = FALSE) THEN
+        result := TRUE
+    END
+END;
+
+tock =
+BEGIN
+    skip
+END;
+
+po <-- get_board_0_O1 =
+BEGIN
+   po := board_0_O1
+END;
+
+po <-- get_board_0_O2 =
+BEGIN
+	po := board_0_O2
+END
+
+END
