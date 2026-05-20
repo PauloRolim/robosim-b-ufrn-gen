@@ -29,11 +29,13 @@ public class GuiApp extends Application {
         // Topo: seleção de arquivo
         Button btnSelecionar = new Button("📂 Selecionar arquivo .rst");
         btnSelecionar.setOnAction(e -> selecionarArquivo(stage));
+        btnSelecionar.setFont(Font.font(16));
 
         labelArquivo = new Label("Nenhum arquivo selecionado");
         labelArquivo.setStyle("-fx-text-fill: gray;");
+        labelArquivo.setFont(Font.font(16));
 
-        HBox topo = new HBox(10, btnSelecionar, labelArquivo);
+        HBox topo = new HBox(16, btnSelecionar, labelArquivo);
         topo.setAlignment(Pos.CENTER_LEFT);
 
         // Meio: botão traduzir
@@ -41,15 +43,16 @@ public class GuiApp extends Application {
         btnTraduzir.setDisable(true);
         btnTraduzir.setStyle("-fx-font-weight: bold;");
         btnTraduzir.setOnAction(e -> executarTraducao());
+        btnTraduzir.setFont(Font.font(16));
 
         // Saída: área de texto
         areaSaida = new TextArea();
         areaSaida.setEditable(false);
-        areaSaida.setFont(Font.font("Consolas", 12));
+        areaSaida.setFont(Font.font("Consolas", 16));
         areaSaida.setPromptText("As mensagens de progresso aparecerão aqui...");
         VBox.setVgrow(areaSaida, Priority.ALWAYS);
 
-        VBox root = new VBox(12, topo, btnTraduzir, areaSaida);
+        VBox root = new VBox(16, topo, btnTraduzir, areaSaida);
         root.setPadding(new Insets(16));
 
         stage.setTitle("Tradutor RoboSim → CSSP");

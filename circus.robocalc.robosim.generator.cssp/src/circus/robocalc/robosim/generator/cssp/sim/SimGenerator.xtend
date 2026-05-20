@@ -182,7 +182,6 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		«generateReadModelInputs(machines, Logici)»
 		
 		«generateIndividualReadOperations(machines, Logici)»
-		
 		write_model_outputs =
 		PRE cycle_state = st_WRITE_OUTPUTS
 		THEN
@@ -194,11 +193,8 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		«generateAggregateWriteLocalOperations(machine)»
 		
 		«generateLocalOperations(machines, Logici)»
-		
 		«generateAllOperationLocalSpecs(machine)»
-		
 		«generateSyncMachinesSpec(machines, Logici)»
-		
 		elapsed <-- since(timer) =
 		PRE timer:uint32_t & elapsed:uint32_t
 		THEN
@@ -268,7 +264,6 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		«generateOperationReadModelInputs(machine)»
 		
 		«generateIndividualReadImplementations(machine)»
-		
 		«generateWriteModelOutputs(machines, Logici)»
 		
 		«generateAggregateWriteOperations(machine)»
@@ -276,7 +271,6 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		«generateOperations(machines, Logici)»
 		
 		«generateAllOperationImplementations(machine)»
-		
 		«generateSyncMachinesImpl(machines, Logici)»
 		
 		elapsed <-- since(timer) =
@@ -811,7 +805,9 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	'''
 	«FOR entry : allVars SEPARATOR "; \n"»«IF entry.isDeterministic»«entry.bVarName» := «entry.initialValue»«ELSE»«entry.bVarName» :: «entry.bType»«ENDIF»«ENDFOR»«IF !allVars.empty»;«ENDIF»
 	«FOR entry : filteredOutputs SEPARATOR "; \n"»«entry.bVarName» := IO_OFF«ENDFOR»«IF !filteredOutputs.empty && (!filteredInputs.empty || !connEvents.empty)»;«ENDIF»
-	«FOR entry : filteredInputs SEPARATOR "; \n"»«entry.bVarName» := IO_OFF«ENDFOR»«IF !filteredInputs.empty && !connEvents.empty»;«ENDIF»
+	«FOR entry : filteredInputs SEPARATOR "; \n"»«IF entry.kind == InputKind.EVENT_VALUE»«entry.bVarName» := IO_OFF
+	    «ELSE»
+	    «entry.bVarName» := IO_OFF«ENDIF»«ENDFOR»«IF !filteredInputs.empty && !connEvents.empty»;«ENDIF»
 	«FOR entry : connEvents SEPARATOR ";"»
 		«entry.sourceVarName» := IO_OFF;
 		«entry.targetVarName» := IO_OFF
@@ -839,6 +835,11 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	            if (initVal !== null) {
 	                // Variável com valor inicial: inicialização determinística
 	                entries.add(new MachineVarEntry(bName, bType, initVal, true))
+	                
+	            } else if (bType == "BOOL") {
+				    // Booleano sem valor inicial → default FALSE
+				    entries.add(new MachineVarEntry(bName, bType, "FALSE", true))
+	            
 	            } else {
 	                // Variável sem valor inicial: inicialização não determinística
 	                entries.add(new MachineVarEntry(bName, bType, null, false))
@@ -859,14 +860,18 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	// Traduz o tipo RoboSim para o tipo B/CSSP correspondente
 	// =========================================================
 	def String translateVarType(Type type) {
-	    val typeName = type?.toString ?: ""
-	    switch typeName {
-	        case "boolean": "BOOL"
-	        case "nat":     "uint32_t"
-	        case "int":     "int"
-	        case "real":    "uint32_t"
-	        default:        "uint32_t"
+	    if (type instanceof TypeRef) {
+	        val decl = (type as TypeRef).ref
+	        if (decl instanceof PrimitiveType) {
+	            switch decl.name {
+	                case "boolean": return "BOOL"
+	                case "nat":     return "uint32_t"
+	                case "int":     return "uint32_t"
+	                case "real":    return "uint32_t"
+	            }
+	        }
 	    }
+    	return "uint32_t"
 	}
 
 	// Traduz o valor inicial de uma variável
@@ -989,7 +994,11 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	
 	        ParExp:
 	            extractPredicates(condition.exp, stm, predicates, usesSinceLocal, connEventMap)
-	
+			
+			// Referência a variável booleana: obst -> "SimSMovement_obst = TRUE"
+			RefExp:
+		    	stm.name + "_" + resolveRefName(condition.ref) + " = TRUE"
+	        
 	        default:
 	            translateCondition(condition, stm, usesSinceLocal, connEventMap)
 	    }
@@ -1054,6 +1063,29 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	}
 	
 	// =========================================================
+	// Gera um bloco IF-ELSIF completo para uma junção aninhada.
+	// O bloco VAR...END cria escopo próprio: guard_1, guard_2...
+	// internos não conflitam com os do bloco pai.
+	// =========================================================
+	def String generateNestedJunctionBlock(
+	    Junction junction,
+	    SimMachineDef stm,
+	    LinkedHashMap<State, Integer> execMap,
+	    Map<String, String> connEventMap) {
+	
+	    val branches   = stm.transitions.filter[ source == junction ].toList
+	    val needsClock = branches.exists[ t | conditionUsesClock(t.condition) ]
+	    val clockVar   = if (needsClock) findClockVarName(branches, stm) else ""
+	    val guardCtx   = collectPredicatesAndConditions(branches, stm, needsClock, connEventMap)
+	    val infos      = buildBranchGuardInfos(branches, stm, needsClock, guardCtx)
+	
+	    // Reutiliza generateGuardBlock — o -1 é ignorado (execNum não aparece no template do bloco)
+	    generateGuardBlock(stm, -1, branches, infos, needsClock, clockVar,
+	        guardCtx, [b, s, m | collectBranchPath(b, s, m, connEventMap)], execMap)
+	        .toString
+	}
+	
+	// =========================================================
 	// Método auxiliar compartilhado que gera o corpo completo
 	// de guards + land + IF para qualquer lista de branches
 	def generateGuardBlock(SimMachineDef stm,
@@ -1100,9 +1132,14 @@ class SimGenerator extends AbstractRoboSimGenerator {
         «val info         = infos.get(i)»
         «val branchResult = collectAction.apply(branches.get(i), stm, execMap)»
         «IF i == 0»IF«ELSE»ELSIF«ENDIF» («info.ifGuardName» = TRUE) THEN
-        «FOR a : branchResult.key»«a»;
+        «FOR x : 0..<branchResult.key.size»
+            «val a       = branchResult.key.get(x)»
+            «val isLast  = (x == branchResult.key.size - 1)»
+            «a»«IF !isLast || branchResult.value !== null»;«ENDIF»
         «ENDFOR»
+        «IF branchResult.value !== null»
         SM_«stm.name»_state:= «branchResult.value»
+        «ENDIF»
     «ENDFOR»
     END
     END
@@ -1350,11 +1387,12 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	        )
 	
 	    '''
-	    «FOR pair : inputs.indexed SEPARATOR ";"»
+	    «FOR pair : inputs.indexed»
 	        read_«pair.value.bVarName» =
 	        BEGIN
 	            «pair.value.bVarName» <-- get_board_0_I«pair.key + 1»
 	        END;
+	         
 	    «ENDFOR»
 	    '''
 	}
@@ -1388,12 +1426,13 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	def generateIndividualReadOperations(SimMachineDef stm) {
 	    val inputs = stm.collectInputEntries
 	    '''
-	    «FOR entry : inputs SEPARATOR ";"»
+	    «FOR entry : inputs»
 	        read_«entry.bVarName» =
 	        PRE cycle_state = st_READ_INPUTS
 	        THEN
-	            «entry.bVarName» :: uint8_t
+	            «entry.bVarName» :: «entry.bType»
 	        END;
+	         
 	    «ENDFOR»
 	    '''
 	}
@@ -1419,12 +1458,12 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	                                 .filter[ !connEventNames.contains(
 	                                     bVarName.replace("i_", "")) ]
 	                                 .toList»
-	        «FOR entry : filteredInputs SEPARATOR ";"»
+	        «FOR entry : filteredInputs»
 	            read_«entry.bVarName» =
 	            PRE cycle_state = st_READ_INPUTS
 	            THEN
-	                «entry.bVarName» :: uint8_t
-	            END;
+	                «entry.bVarName» :: «entry.bType»
+	            END
 	        «ENDFOR»
 	    «ENDFOR»
 	    '''
@@ -1483,20 +1522,39 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	
 	    val entries = new ArrayList<InputEntry>
 	
-	    // FONTE 1: Eventos via interfaces (uses X)
-	    ctx.interfaces
-	       .flatMap[ it.events ]
-	       .forEach[ e |
-	           entries.add(new InputEntry("i_" + e.name, InputKind.EVENT))
-	       ]
-	
+	    // FONTE 1: Eventos via interfaces
+		ctx.interfaces
+   			.flatMap[ it.events ]
+   			.forEach[ e |
+       		   // Flag — sempre gerado, comportamento antigo intocado
+       		   entries.add(new InputEntry("i_" + e.name, InputKind.EVENT))
+
+	       	   // Valor — só quando o evento for tipado
+		       if (e.type !== null) {
+		           entries.add(new InputEntry(
+		               "i_" + e.name + "_value",
+		               InputKind.EVENT_VALUE,
+		               "uint8_t" ))
+		       }
+   			]
+		
+		
 	    // FONTE 2: Eventos via pInterfaces (provides X)
-	    ctx.PInterfaces
-	       .flatMap[ it.events ]
-	       .forEach[ e |
-	           entries.add(new InputEntry("i_" + e.name, InputKind.EVENT))
-	       ]
-	
+		ctx.PInterfaces
+			.flatMap[ it.events ]
+   			.forEach[ e |
+		    // Flag — sempre gerado, comportamento antigo intocado
+       		   entries.add(new InputEntry("i_" + e.name, InputKind.EVENT)) 
+			   
+			   // Valor — só quando o evento for tipado
+		       if (e.type !== null) {
+		           entries.add(new InputEntry(
+		               "i_" + e.name + "_value",
+		               InputKind.EVENT_VALUE,
+		               "uint8_t" ))
+		       }
+   			]
+   	
 	    // FONTE 3: Variáveis via rInterfaces (requires X)
 	    ctx.RInterfaces
 	       .flatMap[ it.variableList ]
@@ -1508,8 +1566,17 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    // FONTE 4: Eventos declarados diretamente no contexto
 	    ctx.events
 	       .forEach[ e |
-	           entries.add(new InputEntry("i_" + e.name, InputKind.EVENT))
-	       ]
+		    // Flag — sempre gerado, comportamento antigo intocado
+       		   entries.add(new InputEntry("i_" + e.name, InputKind.EVENT))
+       		   
+			// Valor — só quando o evento for tipado
+		       if (e.type !== null) {
+		           entries.add(new InputEntry(
+		               "i_" + e.name + "_value",
+		               InputKind.EVENT_VALUE,
+		               "uint8_t" ))
+		       }
+   			]	
 	
 	    // FONTE 5: Variáveis declaradas diretamente no contexto
 	    ctx.variableList
@@ -1535,7 +1602,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    THEN
 	        cycle_state :: uint32_t«IF !inputs.empty» ||«ENDIF»
 	        «FOR entry : inputs SEPARATOR " ||"»
-	            «entry.bVarName» :: uint8_t
+	            «entry.bVarName» :: «entry.bType»
 	        «ENDFOR»
 	    END;
 	    '''
@@ -1563,7 +1630,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    THEN
 	    cycle_state :: uint32_t«IF !inputs.empty» ||«ENDIF»
 	    «FOR entry : inputs SEPARATOR " ||"»
-	        «entry.bVarName» :: uint8_t
+	        «entry.bVarName» :: «entry.bType»
 	    «ENDFOR»
 	    END;
 	    '''
@@ -1884,7 +1951,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
             LessOrEqual:
             	translateOperand(expr.left, stm) + " <= " + translateOperand(expr.right, stm)
 
-	        // GreaterThan -> reescreve como LessOrEqual invertido (B0)
+	        // GreaterThan -> reescreve como LessOrEqual invertido (B0 check)
 	        GreaterThan:
             	translateOperand(expr.right, stm) + " < " + translateOperand(expr.left, stm)
                 
@@ -1893,7 +1960,11 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	        //      ParExp envolve o LessThan interno
 	        ParExp:
 	            translateCondition(expr.exp, stm, usesSinceLocal, connEventMap)
-
+			
+			// Referência a variável booleana: obst -> "SimSMovement_obst = TRUE"
+			RefExp:
+			    stm.name + "_" + resolveRefName(expr.ref) + " = TRUE"
+			
             default: expr.toString
         }
     }
@@ -1907,28 +1978,51 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	
 	// Coleta ações de uma branch saindo de junction + próximo EXEC
     //
-    // branch t5: ação #MBC; $move(false,false) -> target Waiting (EXEC_2)
-    // branch t10: sem ação -> target SMoving (não exec) -> segue até DMoving (EXEC_1)
+    // transition t5: ação #MBC; $move(false,false) -> target Waiting (EXEC_2)
+    // transition t10: sem ação -> target SMoving (não exec) -> segue até DMoving (EXEC_1)
     def Pair<List<String>, String> collectBranchPath(Transition branch, 
-    												  SimMachineDef stm,
-                                                      LinkedHashMap<State, Integer> execMap,
-                                                      Map<String, String> connEventMap) {
+    												 SimMachineDef stm,
+                                                     LinkedHashMap<State, Integer> execMap,
+                                                     Map<String, String> connEventMap) {
         val actions = new ArrayList<String>
 
         // Traduz a ação da própria transição (ex: #MBC; $move(false, false))
         if (branch.action !== null)
             actions.addAll(translateStatement(branch.action, stm, connEventMap))
-
+		
+		// Para nova versao SRanger: emite binding de valor quando condição é $evento?variavel
+	    // $obstacle?obst -> SimSMovement_obst := bool(i_obstacle_value = IO_ON)
+	    if (branch.condition instanceof SimRefExp) {
+	        val simRef = branch.condition as SimRefExp
+	        if (simRef.variable !== null) {
+	            val eventName = simRef.element.name
+	            val varName   = stm.name + "_" + simRef.variable.name
+	            actions.add(varName + " := bool(i_" + eventName + "_value = IO_ON)")
+	        }
+	    }
+		
         val target = branch.target
 
         // Alvo é diretamente um exec state
         if (target instanceof State && execMap.containsKey(target as State))
              // converte Integer para String com prefixo "EXEC_"
         	return actions -> ("EXEC_" + execMap.get(target as State))
-
+		
+		// Direct exec state
+	    if (target instanceof State && execMap.containsKey(target as State))
+	        return actions -> ("EXEC_" + execMap.get(target as State))
+	
+	    // Para nova versao SRanger: alvo é uma junção aninhada 
+	    if (target instanceof Junction) {
+	        val nestedBlock = generateNestedJunctionBlock(
+	            target as Junction, stm, execMap, connEventMap)
+	        actions.add(nestedBlock)
+	        return actions -> null  // null = nested block já emite SM_X_state :=
+	    }
+		
         // Senão, continua coletando a partir do alvo
         val pathResult = collectPathUntilExec(target, stm, execMap, connEventMap)
-        actions.addAll(pathResult.key)
+    	actions.addAll(pathResult.key)
         //converte Integer para String com prefixo "EXEC_"
     		return actions -> ("EXEC_" + pathResult.value)
     }
@@ -2276,7 +2370,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	                            .filter[ !parameters.isEmpty ]
 	                            .toList
     	'''
-	    «FOR op : opsWithParams»
+	    «FOR op : opsWithParams SEPARATOR ";"»
 	        write_o_«op.name» =
 	        BEGIN
 	        «FOR param : op.parameters SEPARATOR ";"»
@@ -2929,15 +3023,23 @@ class InputEntry {
 
     public val String bVarName   // ex: i_obstacle, i_MissionStart
     public val InputKind kind
-
+	public val String bType      // "uint8_t" (flag), "BOOL", "uint32_t" (valor)
+	
+    // Construtor antigo continua existindo — default uint8_t
     new(String bVarName, InputKind kind) {
+        this(bVarName, kind, "uint8_t")
+    }
+    
+    new(String bVarName, InputKind kind, String bType) {
         this.bVarName = bVarName
         this.kind     = kind
+        this.bType    = bType
     }
 }
 
 enum InputKind {
     EVENT,    // i_obstacle  — evento de input
+    EVENT_VALUE,   // valor associado a um evento tipado
     VARIABLE  // i_speed     — required variable de input
 }
 
