@@ -1,9 +1,15 @@
 Sempre que alterar o arquivo do tadutor rodar os seguintes comandos:
 
 mvn clean package -DskipTests
-montar-lib.bat   
-compilar-gui.bat
+.\montar-lib.bat   
+.\compilar-gui.bat
 gui.bat               
+
+
+Alterações somente na Interface:
+
+compilar-gui.bat
+gui.bat
 
 
 Arquitetura da Interface:

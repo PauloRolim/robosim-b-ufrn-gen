@@ -1,6 +1,9 @@
 package circus.robocalc.robosim.generator.cssp;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -8,59 +11,108 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Separator;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 public class GuiApp extends Application {
 
-    private File arquivoSelecionado;
+    // --- Stage ---
+    private Stage stage;
+
+    // --- Tela 1: campos mantidos entre navegações ---
+    private Scene cena1;
     private Label labelArquivo;
+    private Label labelStatus;
+    private ScrollPane scrollMaquinas;
+    private VBox containerCheckboxes;
+    private CheckBox checkTodas;
+    private List<CheckBox> checksMaquinas = new ArrayList<>();
+    private Button btnProximo;
+
+    // Flag anti-loop para listeners dos checkboxes
+    private boolean atualizando = false;
+
+    // --- Tela 2: recriada a cada visita ---
     private TextArea areaSaida;
     private Button btnTraduzir;
 
+    // --- Estado geral ---
+    private File arquivoSelecionado;
+    private final TraductorService service = new TraductorService();
+
     @Override
     public void start(Stage stage) {
-        // Topo: seleção de arquivo
-        Button btnSelecionar = new Button("📂 Selecionar arquivo .rst");
-        btnSelecionar.setOnAction(e -> selecionarArquivo(stage));
-        btnSelecionar.setFont(Font.font(16));
-
-        labelArquivo = new Label("Nenhum arquivo selecionado");
-        labelArquivo.setStyle("-fx-text-fill: gray;");
-        labelArquivo.setFont(Font.font(16));
-
-        HBox topo = new HBox(16, btnSelecionar, labelArquivo);
-        topo.setAlignment(Pos.CENTER_LEFT);
-
-        // Meio: botão traduzir
-        btnTraduzir = new Button("▶ Traduzir");
-        btnTraduzir.setDisable(true);
-        btnTraduzir.setStyle("-fx-font-weight: bold;");
-        btnTraduzir.setOnAction(e -> executarTraducao());
-        btnTraduzir.setFont(Font.font(16));
-
-        // Saída: área de texto
-        areaSaida = new TextArea();
-        areaSaida.setEditable(false);
-        areaSaida.setFont(Font.font("Consolas", 16));
-        areaSaida.setPromptText("As mensagens de progresso aparecerão aqui...");
-        VBox.setVgrow(areaSaida, Priority.ALWAYS);
-
-        VBox root = new VBox(16, topo, btnTraduzir, areaSaida);
-        root.setPadding(new Insets(16));
-
+        this.stage = stage;
+        cena1 = criarCena1();
+        stage.setScene(cena1);
         stage.setTitle("Tradutor RoboSim → CSSP");
-        stage.setScene(new Scene(root, 800, 600));
         stage.show();
     }
 
-    private void selecionarArquivo(Stage stage) {
+    // =========================================================
+    // TELA 1 — Seleção de arquivo e máquinas
+    // =========================================================
+    private Scene criarCena1() {
+        // Linha 1: seletor de arquivo
+        Button btnSelecionar = new Button("📂 Selecionar arquivo .rst");
+        btnSelecionar.setFont(Font.font(14));
+        btnSelecionar.setOnAction(e -> selecionarArquivo());
+
+        labelArquivo = new Label("Nenhum arquivo selecionado");
+        labelArquivo.setFont(Font.font(14));
+        labelArquivo.setStyle("-fx-text-fill: gray;");
+
+        HBox linhaArquivo = new HBox(12, btnSelecionar, labelArquivo);
+        linhaArquivo.setAlignment(Pos.CENTER_LEFT);
+
+        // Label de status (carregando / erro)
+        labelStatus = new Label();
+        labelStatus.setFont(Font.font(13));
+        labelStatus.setVisible(false);
+        labelStatus.setManaged(false);
+
+        // Área de checkboxes dentro de ScrollPane
+        containerCheckboxes = new VBox(8);
+        containerCheckboxes.setPadding(new Insets(8, 4, 8, 4));
+
+        scrollMaquinas = new ScrollPane(containerCheckboxes);
+        scrollMaquinas.setFitToWidth(true);
+        scrollMaquinas.setVisible(false);
+        scrollMaquinas.setManaged(false);
+        VBox.setVgrow(scrollMaquinas, Priority.ALWAYS);
+
+        // Botão Próximo (alinhado à direita)
+        btnProximo = new Button("Próximo →");
+        btnProximo.setFont(Font.font(14));
+        btnProximo.setDisable(true);
+        btnProximo.setOnAction(e -> irParaTela2());
+
+        HBox linhaProximo = new HBox(btnProximo);
+        linhaProximo.setAlignment(Pos.CENTER_RIGHT);
+
+        VBox root = new VBox(16,
+            linhaArquivo,
+            new Separator(),
+            labelStatus,
+            scrollMaquinas,
+            linhaProximo
+        );
+        root.setPadding(new Insets(20));
+
+        return new Scene(root, 800, 500);
+    }
+
+    private void selecionarArquivo() {
         FileChooser fc = new FileChooser();
         fc.setTitle("Selecionar arquivo RoboSim");
         fc.getExtensionFilters().add(
@@ -71,27 +123,164 @@ public class GuiApp extends Application {
             arquivoSelecionado = f;
             labelArquivo.setText(f.getName());
             labelArquivo.setStyle("-fx-text-fill: black;");
-            btnTraduzir.setDisable(false);
+            carregarMaquinas();
         }
+    }
+
+    private void carregarMaquinas() {
+        // Limpa estado anterior
+        checksMaquinas.clear();
+        containerCheckboxes.getChildren().clear();
+        scrollMaquinas.setVisible(false);
+        scrollMaquinas.setManaged(false);
+        btnProximo.setDisable(true);
+
+        // Mostra "carregando"
+        labelStatus.setText("⏳ Carregando máquinas...");
+        labelStatus.setStyle("-fx-text-fill: gray;");
+        labelStatus.setVisible(true);
+        labelStatus.setManaged(true);
+
+        new Thread(() -> {
+            List<String> maquinas = service.listarMaquinas(arquivoSelecionado, null);
+
+            Platform.runLater(() -> {
+                labelStatus.setVisible(false);
+                labelStatus.setManaged(false);
+
+                if (maquinas.isEmpty()) {
+                    labelStatus.setText("❌ Nenhuma máquina de estados encontrada no modelo.");
+                    labelStatus.setStyle("-fx-text-fill: red;");
+                    labelStatus.setVisible(true);
+                    labelStatus.setManaged(true);
+                    return;
+                }
+
+                popularCheckboxes(maquinas);
+            });
+        }).start();
+    }
+
+    private void popularCheckboxes(List<String> maquinas) {
+        // Checkbox mestre "Todas as máquinas"
+        checkTodas = new CheckBox("Todas as máquinas");
+        checkTodas.setFont(Font.font(null, FontWeight.BOLD, 14));
+        checkTodas.setSelected(true);
+        checkTodas.setAllowIndeterminate(false); // só código seta indeterminate
+        checkTodas.setOnAction(e -> {
+            if (!atualizando) {
+                atualizando = true;
+                boolean estado = checkTodas.isSelected();
+                checksMaquinas.forEach(cb -> cb.setSelected(estado));
+                atualizando = false;
+                atualizarBtnProximo();
+            }
+        });
+
+        containerCheckboxes.getChildren().add(checkTodas);
+        containerCheckboxes.getChildren().add(new Separator());
+
+        // Checkboxes individuais (indentados)
+        for (String nome : maquinas) {
+            CheckBox cb = new CheckBox(nome);
+            cb.setFont(Font.font(14));
+            cb.setSelected(true);
+            cb.setPadding(new Insets(2, 0, 2, 20));
+            cb.setOnAction(e -> {
+                if (!atualizando) {
+                    atualizando = true;
+                    long marcadas = checksMaquinas.stream()
+                            .filter(CheckBox::isSelected).count();
+                    if (marcadas == checksMaquinas.size()) {
+                        checkTodas.setIndeterminate(false);
+                        checkTodas.setSelected(true);
+                    } else if (marcadas == 0) {
+                        checkTodas.setIndeterminate(false);
+                        checkTodas.setSelected(false);
+                    } else {
+                        // Algumas marcadas → indeterminate no mestre
+                        checkTodas.setIndeterminate(true);
+                    }
+                    atualizando = false;
+                    atualizarBtnProximo();
+                }
+            });
+            checksMaquinas.add(cb);
+            containerCheckboxes.getChildren().add(cb);
+        }
+
+        scrollMaquinas.setVisible(true);
+        scrollMaquinas.setManaged(true);
+        atualizarBtnProximo();
+    }
+
+    private void atualizarBtnProximo() {
+        boolean algumaMarcada = checksMaquinas.stream().anyMatch(CheckBox::isSelected);
+        btnProximo.setDisable(!algumaMarcada);
+    }
+
+    private void irParaTela2() {
+        // Tela 2 é recriada a cada visita (output sempre limpo)
+        stage.setScene(criarCena2());
+    }
+
+    // =========================================================
+    // TELA 2 — Tradução e mensagens
+    // =========================================================
+    private Scene criarCena2() {
+        Button btnVoltar = new Button("← Voltar");
+        btnVoltar.setFont(Font.font(14));
+        btnVoltar.setOnAction(e -> stage.setScene(cena1));
+
+        btnTraduzir = new Button("▶ Traduzir");
+        btnTraduzir.setFont(Font.font(14));
+        btnTraduzir.setStyle("-fx-font-weight: bold;");
+        btnTraduzir.setOnAction(e -> executarTraducao());
+
+        HBox topo = new HBox(12, btnVoltar, btnTraduzir);
+        topo.setAlignment(Pos.CENTER_LEFT);
+
+        areaSaida = new TextArea();
+        areaSaida.setEditable(false);
+        areaSaida.setFont(Font.font("Consolas", 13));
+        areaSaida.setPromptText("As mensagens de progresso aparecerão aqui...");
+        VBox.setVgrow(areaSaida, Priority.ALWAYS);
+
+        VBox root = new VBox(16, topo, areaSaida);
+        root.setPadding(new Insets(20));
+
+        return new Scene(root, 800, 500);
     }
 
     private void executarTraducao() {
         btnTraduzir.setDisable(true);
         areaSaida.clear();
-        areaSaida.appendText("Iniciando tradução de: " + arquivoSelecionado.getName() + "\n\n");
 
-        // Pasta de saída ao lado do arquivo de entrada
-        File pastaSaida = new File(
-            arquivoSelecionado.getParentFile(),
-            "cssp-gen/sim"
-        );
+        // Coleta máquinas marcadas
+        List<String> selecionadas = checksMaquinas.stream()
+                .filter(CheckBox::isSelected)
+                .map(CheckBox::getText)
+                .collect(Collectors.toList());
 
-        // Roda em thread separada para não travar a UI
+        // Se todas estão marcadas → passa null (gera tudo em uma chamada)
+        List<String> filtro = (selecionadas.size() == checksMaquinas.size())
+                ? null : selecionadas;
+
+        if (filtro == null) {
+            areaSaida.appendText("Iniciando tradução de TODAS as máquinas de: "
+                    + arquivoSelecionado.getName() + "\n\n");
+        } else {
+            areaSaida.appendText("Iniciando tradução de " + filtro
+                    + " em: " + arquivoSelecionado.getName() + "\n\n");
+        }
+
+        File pastaSaida = new File(arquivoSelecionado.getParentFile(), "cssp-gen/sim");
+
         new Thread(() -> {
-            TraductorService service = new TraductorService();
             service.traduzir(
                 arquivoSelecionado,
                 pastaSaida,
+                filtro,
                 msg -> Platform.runLater(() -> areaSaida.appendText(msg + "\n"))
             );
             Platform.runLater(() -> btnTraduzir.setDisable(false));

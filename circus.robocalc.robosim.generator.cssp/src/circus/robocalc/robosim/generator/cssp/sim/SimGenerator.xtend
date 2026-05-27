@@ -74,7 +74,20 @@ import org.eclipse.xtext.generator.IFileSystemAccess2
 import org.eclipse.xtext.generator.IGeneratorContext
 
 class SimGenerator extends AbstractRoboSimGenerator {
+	
+	// Nome da máquina selecionada para tradução.
+    // null  = traduzir todas (comportamento atual preservado)
+    // "Nome"= traduzir apenas a máquina com esse nome
+    var String selectedMachineName = null
 
+    def void setSelectedMachine(String name) {
+        this.selectedMachineName = name
+    }
+
+    def String getSelectedMachine() {
+        this.selectedMachineName
+    }
+	
 	override getID() {
 		"ROBOSIM_PRISM_GENERATOR"
 	}
@@ -90,6 +103,9 @@ class SimGenerator extends AbstractRoboSimGenerator {
 			// if there are relevant warning, do not generate
 		//	return;
 		//}
+		
+		// TEMPORÁRIO: força a seleção para testes
+    	//setSelectedMachine("Machine_1")
 		
 		val UserCtx = resource.allContents.head as RCPackage;
  		   if (UserCtx !== null){
@@ -126,7 +142,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		val allOutputNames = (machine.getOutputOperationParamNames
                            + machine.getOutputVariables.map[ "o_" + it.name ])
                            .toList
-        //val outputs = machine.collectOutputEntries
+       
                            
         //Valida se a quantidade de saída é compativel antes de gerar falha
         validateOutputCount(allOutputNames)
@@ -685,7 +701,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	// =========================================================
 	def collectAllSimMachines(RCPackage pkg) {
 	    val machines = new ArrayList<SimMachineDef>
-	
+				
 	    // Possivel origem dentro de controllers nos modulos
 	    pkg.modules
 	       .flatMap[ nodes ]
@@ -711,20 +727,49 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	       .forEach[ machines.add(it) ]
 	
 	    // Remove a mesma máquina referenciada por mais de um controller
-	    return machines.toSet.toList
+	    //return machines.toSet.toList
+		
+		val deduplicated = machines.toSet.toList
+		
+	    // Alteração para selecionar maquinas: filtra pela máquina selecionada quando definida
+	    if (selectedMachineName !== null)
+	        return deduplicated.filter[ name == selectedMachineName ].toList
+	
+	    return deduplicated
 	}
 	
 	// =========================================================
 	// Coleta os módulos roboticos do modelo e produz uma lista
 	def collectAllSimModules(RCPackage pkg) {
-	    val modules = new ArrayList<SimModule>
+	    //val modules = new ArrayList<SimModule>
 	
 	    // Módulos declarados diretamente no pacote
-	    pkg.modules
-	       .filter(SimModule)
-	       .forEach[ modules.add(it) ]
+	    //pkg.modules
+	    //   .filter(SimModule)
+	    //   .forEach[ modules.add(it) ]
 	
-	    return modules.toSet.toList
+	    //return modules.toSet.toList
+	    val allModules = pkg.modules.filter(SimModule).toSet.toList
+
+	    if (selectedMachineName === null)
+	        return allModules
+	
+	    // Mantém apenas módulos cujos controllers referenciam a máquina selecionada
+	    // isso garante que cycleDef de outros módulos não vaze para a saída do tradutor.
+	    return allModules.filter[ mod |
+	        mod.nodes
+	           .filter(ControllerDef)
+	           .flatMap[ machines ]
+	           .map[ s |
+	               switch s {
+	                   SimMachineDef:   s.name
+	                   StateMachineRef: s.ref.name
+	                   default:         null
+	               }
+	           ]
+	           .filterNull
+	           .contains(selectedMachineName)
+	    ].toList
 	}
 	
 	// =========================================================
@@ -2672,7 +2717,8 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	}
     
     def SimMachineDef getSimMachine(RCPackage pkg) {
-    	pkg.machines.head as SimMachineDef
+    	//pkg.machines.head as SimMachineDef
+    	collectAllSimMachines(pkg).head
 	}
 	
 	
@@ -2752,11 +2798,6 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	
 	    return 0
 	}
-	
-	/*/ Versão original mantida para compatibilidade
-	def int getCycleDefValue(RCPackage pkg) {
-	    getCycleDefValueForMachine(pkg.machines.head as SimMachineDef)
-	}*/
 							
 	def generateUserCtx(RCPackage UserCtx){
 		val modules = collectAllSimModules(UserCtx) 
