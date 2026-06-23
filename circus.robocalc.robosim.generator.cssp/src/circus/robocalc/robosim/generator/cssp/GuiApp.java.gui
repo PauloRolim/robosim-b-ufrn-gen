@@ -37,14 +37,15 @@ public class GuiApp extends Application {
     private VBox containerCheckboxes;
     private CheckBox checkTodas;
     private List<CheckBox> checksMaquinas = new ArrayList<>();
-    private Button btnProximo;
+    //private Button btnProximo;
+    private Button btnTraduzir;
 
     // Flag anti-loop para listeners dos checkboxes
     private boolean atualizando = false;
 
     // --- Tela 2: recriada a cada visita ---
     private TextArea areaSaida;
-    private Button btnTraduzir;
+    
 
     // --- Estado geral ---
     private File arquivoSelecionado;
@@ -91,21 +92,22 @@ public class GuiApp extends Application {
         scrollMaquinas.setManaged(false);
         VBox.setVgrow(scrollMaquinas, Priority.ALWAYS);
 
-        // Botão Próximo (alinhado à direita)
-        btnProximo = new Button("Próximo →");
-        btnProximo.setFont(Font.font(14));
-        btnProximo.setDisable(true);
-        btnProximo.setOnAction(e -> irParaTela2());
+        // Botão Traduzir (alinhado à direita) -- Alteração NOVA
+        btnTraduzir = new Button("▶ Traduzir");
+        btnTraduzir.setFont(Font.font(14));
+        btnTraduzir.setStyle("-fx-font-weight: bold;");
+        btnTraduzir.setDisable(true);
+        btnTraduzir.setOnAction(e -> irParaTela2eTraducao());
 
-        HBox linhaProximo = new HBox(btnProximo);
-        linhaProximo.setAlignment(Pos.CENTER_RIGHT);
+        HBox linhaAcao = new HBox(btnTraduzir);
+        linhaAcao.setAlignment(Pos.CENTER_RIGHT);
 
         VBox root = new VBox(16,
             linhaArquivo,
             new Separator(),
             labelStatus,
             scrollMaquinas,
-            linhaProximo
+            linhaAcao
         );
         root.setPadding(new Insets(20));
 
@@ -133,7 +135,7 @@ public class GuiApp extends Application {
         containerCheckboxes.getChildren().clear();
         scrollMaquinas.setVisible(false);
         scrollMaquinas.setManaged(false);
-        btnProximo.setDisable(true);
+        //btnProximo.setDisable(true);
 
         // Mostra "carregando"
         labelStatus.setText("⏳ Carregando máquinas...");
@@ -173,7 +175,7 @@ public class GuiApp extends Application {
                 boolean estado = checkTodas.isSelected();
                 checksMaquinas.forEach(cb -> cb.setSelected(estado));
                 atualizando = false;
-                atualizarBtnProximo();
+                atualizarBtnTraduzir();
             }
         });
 
@@ -202,7 +204,7 @@ public class GuiApp extends Application {
                         checkTodas.setIndeterminate(true);
                     }
                     atualizando = false;
-                    atualizarBtnProximo();
+                    atualizarBtnTraduzir();
                 }
             });
             checksMaquinas.add(cb);
@@ -211,17 +213,20 @@ public class GuiApp extends Application {
 
         scrollMaquinas.setVisible(true);
         scrollMaquinas.setManaged(true);
-        atualizarBtnProximo();
+        atualizarBtnTraduzir();
     }
 
-    private void atualizarBtnProximo() {
+    private void atualizarBtnTraduzir() {
         boolean algumaMarcada = checksMaquinas.stream().anyMatch(CheckBox::isSelected);
-        btnProximo.setDisable(!algumaMarcada);
+        btnTraduzir.setDisable(!algumaMarcada);
     }
 
-    private void irParaTela2() {
+    private void irParaTela2eTraducao() {
         // Tela 2 é recriada a cada visita (output sempre limpo)
         stage.setScene(criarCena2());
+        
+        // dispara tradução imediatamente
+        executarTraducao();
     }
 
     // =========================================================
@@ -232,12 +237,12 @@ public class GuiApp extends Application {
         btnVoltar.setFont(Font.font(14));
         btnVoltar.setOnAction(e -> stage.setScene(cena1));
 
-        btnTraduzir = new Button("▶ Traduzir");
-        btnTraduzir.setFont(Font.font(14));
-        btnTraduzir.setStyle("-fx-font-weight: bold;");
-        btnTraduzir.setOnAction(e -> executarTraducao());
+        //btnTraduzir = new Button("▶ Traduzir");
+        //btnTraduzir.setFont(Font.font(14));
+        //btnTraduzir.setStyle("-fx-font-weight: bold;");
+        //btnTraduzir.setOnAction(e -> executarTraducao());
 
-        HBox topo = new HBox(12, btnVoltar, btnTraduzir);
+        HBox topo = new HBox(12, btnVoltar);
         topo.setAlignment(Pos.CENTER_LEFT);
 
         areaSaida = new TextArea();

@@ -63,6 +63,9 @@ import circus.robocalc.robosim.SimMachineDef
 import circus.robocalc.robosim.SimModule
 import circus.robocalc.robosim.SimRefExp
 import circus.robocalc.robosim.textual.generator.AbstractRoboSimGenerator
+import org.eclipse.emf.ecore.EObject
+import org.eclipse.emf.ecore.util.EcoreUtil
+import circus.robocalc.robochart.Interface
 import java.util.ArrayList
 import java.util.HashSet
 import java.util.LinkedHashMap
@@ -72,6 +75,8 @@ import java.util.Set
 import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.xtext.generator.IFileSystemAccess2
 import org.eclipse.xtext.generator.IGeneratorContext
+import circus.robocalc.robochart.Operation
+import circus.robocalc.robochart.Event
 
 class SimGenerator extends AbstractRoboSimGenerator {
 	
@@ -105,7 +110,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		//}
 		
 		// TEMPORÁRIO: força a seleção para testes
-    	//setSelectedMachine("Machine_1")
+    	//setSelectedMachine(null)
 		
 		val UserCtx = resource.allContents.head as RCPackage;
  		   if (UserCtx !== null){
@@ -206,11 +211,14 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		cycle_state     :: uint8_t
 		END;
 		
-		«generateAggregateWriteLocalOperations(machine)»
+		«generateAggregateWriteLocalOperations(machines)»
 		
 		«generateLocalOperations(machines, Logici)»
-		«generateAllOperationLocalSpecs(machine)»
+		
+		«generateAllOperationLocalSpecs(machines)»
+		
 		«generateSyncMachinesSpec(machines, Logici)»
+		
 		elapsed <-- since(timer) =
 		PRE timer:uint32_t & elapsed:uint32_t
 		THEN
@@ -277,16 +285,15 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		write_model_outputs
 		END;
 		
-		«generateOperationReadModelInputs(machine)»
+		«generateOperationReadModelInputs(machines, Logici)»
 		
-		«generateIndividualReadImplementations(machine)»
+		«generateIndividualReadImplementations(machines, Logici)»
 		«generateWriteModelOutputs(machines, Logici)»
-		
-		«generateAggregateWriteOperations(machine)»
+		«generateAggregateWriteOperations(machines)»
 		
 		«generateOperations(machines, Logici)»
 		
-		«generateAllOperationImplementations(machine)»
+		«generateAllOperationImplementations(machines)»
 		«generateSyncMachinesImpl(machines, Logici)»
 		
 		elapsed <-- since(timer) =
@@ -344,6 +351,58 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		
 		END
 	'''
+	}
+	//==========================================================
+	// Resolve o prefixo de origem de um Event ou Operation.
+	// move (dentro de interface Operations) -> "Operations"
+	// drop (declarado direto no contexto, mas existe em Services) -> "Services"
+	// fallback -> nome da máquina
+	def String originPrefixOf(EObject element, SimMachineDef stm) {
+	
+	    // Caso 1: declarado dentro de uma interface
+	    val container = element.eContainer
+	    if (container instanceof Interface)
+	        return (container as Interface).name
+		
+		// Caso 2: Variable dentro de VariableList dentro de Interface
+    	if (container !== null && container.eContainer instanceof Interface)
+        return (container.eContainer as Interface).name
+				
+	    // Caso 3: declarado direto no contexto -> busca interface de mesmo nome
+	    val elementName = switch element {
+	        Event:     element.name
+	        Operation: element.name
+	        Variable:  element.name      // Adicionei depois
+	        default:   null
+    	}
+    	
+	    if (elementName !== null) {
+	        val root  = EcoreUtil.getRootContainer(stm)
+	        val iface = root.eAllContents.toList
+	            .filter(Interface)
+	            .findFirst[ i |
+	                i.events.exists[ name == elementName ] ||
+	                i.operations.exists[ name == elementName ]
+	            ]
+	        if (iface !== null) return iface.name
+	    }
+	
+	    // Fallback
+	    return stm.name
+	}
+	
+	//==========================================================
+	// Filtro adicional para auxiliar na escrita de variáveis
+	// da máquina selecionada para tradução
+	def filterConnectedEvents(
+	    List<ConnectedEventEntry> connEvents,
+	    List<SimMachineDef> machines) {
+	
+	    val machineNames = machines.map[ name ].toSet
+	    return connEvents.filter[
+		        machineNames.contains(sourceMachineName) &&
+		        machineNames.contains(targetMachineName)
+		    ].toList
 	}
 	
 	// =========================================================
@@ -485,7 +544,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
                     .flatMap[ collectInputEntries ]
                     .filter[ !connEventNames.contains(
                         bVarName.replace("i_", "")) ]
-                    .map[ bVarName + " :: uint8_t" ]
+                    .map[ prefixedName + " :: uint8_t" ]
                     .toList
 	
 	    // Agrega outputs de todas as máquinas, excluindo eventos conectados
@@ -493,7 +552,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	                        .flatMap[ collectOutputEntries ]
 	                        .filter[ !connEventNames.contains(
 	                            bVarName.replace("o_", "")) ]
-	                        .map[ bVarName + " :: uint8_t" ]
+	                        .map[ prefixedName + " :: uint8_t" ]
 	                        .toList
 	
 	    // Eventos conectados — ambos os lados (source e target)
@@ -571,7 +630,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    «FOR v : machineVars SEPARATOR " ||"»«v.bVarName» :: «v.bType»«ENDFOR»«IF !machineVars.empty && (!filteredOutputs.empty || !sourceEvents.empty || !targetEvents.empty)» ||«ENDIF»
 	    «FOR e : sourceEvents SEPARATOR " ||"»«e.sourceVarName» :: uint8_t«ENDFOR»«IF !sourceEvents.empty && (!filteredOutputs.empty || !targetEvents.empty)» ||«ENDIF»
 	    «FOR e : targetEvents SEPARATOR " ||"»«e.targetVarName» :: uint8_t«ENDFOR»«IF !targetEvents.empty && !filteredOutputs.empty» ||«ENDIF»
-	    «FOR o : filteredOutputs SEPARATOR " ||"»«o.bVarName» :: uint8_t«ENDFOR»
+	    «FOR o : filteredOutputs SEPARATOR " ||"»«o.prefixedName» :: uint8_t«"\n"»«ENDFOR»
 	    END;
 	    «"\n"»
 	    '''
@@ -780,7 +839,8 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    val allVars      = machines.flatMap[ collectMachineVarEntries ].toList
 	    val allOutputs   = machines.flatMap[ collectOutputEntries     ].toList
 	    val allInputs    = machines.flatMap[ collectInputEntries      ].toList
-	    val connEvents   = collectConnectedEvents(pkg)
+	    val connEventsAll = collectConnectedEvents(pkg)
+		val connEvents    = filterConnectedEvents(connEventsAll, machines)  // ← novo
 	    
 	    // Coleta os nomes dos eventos conectados para excluir
 	    // o_ e i_ correspondentes (evita valores duplicados)
@@ -794,9 +854,9 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	«FOR entry : allVars SEPARATOR ", \n"»
 		«entry.bVarName»«ENDFOR»«IF !allVars.empty»,«ENDIF»
 	«FOR entry : filteredOutputs SEPARATOR ", \n"»
-        «entry.bVarName»«ENDFOR»«IF !filteredOutputs.empty && (!filteredInputs.empty || !connEvents.empty)»,«ENDIF»
+        «entry.prefixedName»«ENDFOR»«IF !filteredOutputs.empty && (!filteredInputs.empty || !connEvents.empty)»,«ENDIF»
 	«FOR entry : filteredInputs SEPARATOR ", \n"»
-        «entry.bVarName»«ENDFOR»«IF !filteredInputs.empty && !connEvents.empty»,«ENDIF»
+        «entry.prefixedName»«ENDFOR»«IF !filteredInputs.empty && !connEvents.empty»,«ENDIF»
 	«FOR entry : connEvents SEPARATOR ","»
         «entry.sourceVarName»,
         «entry.targetVarName»
@@ -812,7 +872,8 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    val allVars      = machines.flatMap[ collectMachineVarEntries ].toList
     	val allOutputs   = machines.flatMap[ collectOutputEntries     ].toList
     	val allInputs    = machines.flatMap[ collectInputEntries      ].toList
-    	val connEvents   = collectConnectedEvents(pkg)
+    	val connEventsAll = collectConnectedEvents(pkg)
+		val connEvents    = filterConnectedEvents(connEventsAll, machines)  // ← novo
 
 	    val connEventNames = connEvents.map[ eventName ].toSet
 
@@ -822,9 +883,9 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	«FOR entry : allVars SEPARATOR " &\n"»
 	     «entry.bVarName» : «entry.bType»«ENDFOR»«IF !allVars.empty» &«ENDIF»
 	«FOR entry : filteredOutputs SEPARATOR " &\n"»
-	     «entry.bVarName» : uint8_t«ENDFOR»«IF !filteredOutputs.empty && (!filteredInputs.empty || !connEvents.empty)» &«ENDIF»
+	      «entry.prefixedName» : uint8_t«ENDFOR»«IF !filteredOutputs.empty && (!filteredInputs.empty || !connEvents.empty)» &«ENDIF»
 	«FOR entry : filteredInputs SEPARATOR " &\n"»
-	     «entry.bVarName» : uint8_t«ENDFOR»«IF !filteredInputs.empty && !connEvents.empty» &«ENDIF»
+	      «entry.prefixedName» : uint8_t«ENDFOR»«IF !filteredInputs.empty && !connEvents.empty» &«ENDIF»
 	«FOR entry : connEvents SEPARATOR " &\n"»
 	     «entry.sourceVarName» : uint8_t &
 	     «entry.targetVarName» : uint8_t
@@ -841,7 +902,8 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    val allVars      = machines.flatMap[ collectMachineVarEntries ].toList
     	val allOutputs   = machines.flatMap[ collectOutputEntries     ].toList
     	val allInputs    = machines.flatMap[ collectInputEntries      ].toList
-    	val connEvents   = collectConnectedEvents(pkg)
+    	val connEventsAll = collectConnectedEvents(pkg)
+		val connEvents    = filterConnectedEvents(connEventsAll, machines)  // ← novo
 
 	   	val connEventNames = connEvents.map[ eventName ].toSet
 	
@@ -849,10 +911,10 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    val filteredInputs  = allInputs.filter[  !connEventNames.contains(it.bVarName.replace("i_", "")) ].toList
 	'''
 	«FOR entry : allVars SEPARATOR "; \n"»«IF entry.isDeterministic»«entry.bVarName» := «entry.initialValue»«ELSE»«entry.bVarName» :: «entry.bType»«ENDIF»«ENDFOR»«IF !allVars.empty»;«ENDIF»
-	«FOR entry : filteredOutputs SEPARATOR "; \n"»«entry.bVarName» := IO_OFF«ENDFOR»«IF !filteredOutputs.empty && (!filteredInputs.empty || !connEvents.empty)»;«ENDIF»
-	«FOR entry : filteredInputs SEPARATOR "; \n"»«IF entry.kind == InputKind.EVENT_VALUE»«entry.bVarName» := IO_OFF
+	«FOR entry : filteredOutputs SEPARATOR "; \n"»«entry.prefixedName» := IO_OFF«ENDFOR»«IF !filteredOutputs.empty && (!filteredInputs.empty || !connEvents.empty)»;«ENDIF»
+	«FOR entry : filteredInputs SEPARATOR "; \n"»«IF entry.kind == InputKind.EVENT_VALUE»«entry.prefixedName» := IO_OFF
 	    «ELSE»
-	    «entry.bVarName» := IO_OFF«ENDIF»«ENDFOR»«IF !filteredInputs.empty && !connEvents.empty»;«ENDIF»
+	    «entry.prefixedName» := IO_OFF«ENDIF»«ENDFOR»«IF !filteredInputs.empty && !connEvents.empty»;«ENDIF»
 	«FOR entry : connEvents SEPARATOR ";"»
 		«entry.sourceVarName» := IO_OFF;
 		«entry.targetVarName» := IO_OFF
@@ -1025,15 +1087,18 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	        // Condições simples: não precisam de predicado
 	        SimRefExp:{
 	           val eventName = condition.element.name
-	           val bName     = connEventMap.getOrDefault(eventName, "i_" + eventName)
+	           val prefix = originPrefixOf(condition.element, stm)
+	           val bName  = connEventMap.getOrDefault(eventName, prefix + "_i_" + eventName)
 	           bName + " = IO_ON"
 			}
 			
 	        Not:
 	            if (condition.exp instanceof SimRefExp) {
-	                val eventName = (condition.exp as SimRefExp).element.name
-	                val bName     = connEventMap.getOrDefault(eventName, "i_" + eventName)
-	                bName + " = IO_OFF"
+	                val simRef    = condition.exp as SimRefExp
+			        val eventName = simRef.element.name
+			        val prefix    = originPrefixOf(simRef.element, stm)
+			        val bName     = connEventMap.getOrDefault(eventName, prefix + "_i_" + eventName)
+			        bName + " = IO_OFF"
             	} else
                 	extractPredicates(condition.exp, stm, predicates, usesSinceLocal, connEventMap)
 	
@@ -1348,22 +1413,25 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	//     o_move_av :: uint8_t
 	// END
 	// =========================================================
-	def generateOperationLocalSpec(OperationSig op) '''
-	    «op.name»(«FOR p : op.parameters SEPARATOR ","»l_«p.name»«ENDFOR») =
+	def generateOperationLocalSpec(OperationSig op, SimMachineDef stm) '''
+	    «val opPrefix = originPrefixOf(op, stm)»
+	    «opPrefix»_«op.name»(«FOR p : op.parameters SEPARATOR ","»l_«p.name»«ENDFOR») =
 	    PRE «FOR p : op.parameters SEPARATOR " & "»l_«p.name»:«translateParamType(p)»«ENDFOR»
 	    THEN
-	        «FOR p : op.parameters SEPARATOR " ||"»
-	            o_«op.name»_«p.name» :: uint8_t
-	        «ENDFOR»
+	    «FOR p : op.parameters SEPARATOR " ||"»
+	        «opPrefix»_o_«op.name»_«p.name» :: uint8_t
+	    «ENDFOR»
 	    END;
 	'''
 	
 	// Gera para todas as operações com parâmetros
-	def generateAllOperationLocalSpecs(SimMachineDef stm) {
-	    val ops = stm.getOutputOperationsWithParams
+	def generateAllOperationLocalSpecs(List<SimMachineDef> machines) {
 	    '''
-	    «FOR op : ops SEPARATOR ";"»
-	        «generateOperationLocalSpec(op)»
+	    «FOR stm : machines»
+	    	«val ops = stm.getOutputOperationsWithParams»
+	    	«FOR op : ops»
+	        	«generateOperationLocalSpec(op, stm)»
+	        «ENDFOR»
 	    «ENDFOR»
 	    '''
 	}
@@ -1384,26 +1452,30 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	//     END
 	// END
 	// =========================================================
-	def generateOperationImplementation(OperationSig op) '''
-	    «op.name»(«FOR p : op.parameters SEPARATOR ","»l_«p.name»«ENDFOR») =
+	def generateOperationImplementation(OperationSig op, SimMachineDef stm) '''
+	    «val opPrefix = originPrefixOf(op, stm)»
+	    «opPrefix»_«op.name»(«FOR p : op.parameters SEPARATOR ","»l_«p.name»«ENDFOR») =
 	    BEGIN
-	        «FOR p : op.parameters SEPARATOR ";"»
-	            IF l_«p.name» = TRUE
-	            THEN
-	                o_«op.name»_«p.name» := IO_ON
-	            ELSE
-	                o_«op.name»_«p.name» := IO_OFF
-	            END
-	        «ENDFOR»
+	    «FOR p : op.parameters SEPARATOR ";"»
+	        IF l_«p.name» = TRUE
+	        THEN
+	        	«opPrefix»_o_«op.name»_«p.name» := IO_ON
+	        ELSE
+	        	«opPrefix»_o_«op.name»_«p.name» := IO_OFF
+	        END
+	    «ENDFOR»
 	    END;
+	     
 	'''
 	
 	// Orquestrador: gera para todas as operações com parâmetros
-	def generateAllOperationImplementations(SimMachineDef stm) {
-	    val ops = stm.getOutputOperationsWithParams
+	def generateAllOperationImplementations(List<SimMachineDef> machines) {
 	    '''
-	    «FOR op : ops SEPARATOR ";"»
-	        «generateOperationImplementation(op)»
+	    «FOR stm : machines»
+	    	«val ops = stm.getOutputOperationsWithParams»
+		    «FOR op : ops»
+    	         «generateOperationImplementation(op, stm)»
+		    «ENDFOR»    
 	    «ENDFOR»
 	    '''
 	}
@@ -1433,26 +1505,57 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	
 	    '''
 	    «FOR pair : inputs.indexed»
-	        read_«pair.value.bVarName» =
+	        read_«pair.value.prefixedName» =
 	        BEGIN
-	            «pair.value.bVarName» <-- get_board_0_I«pair.key + 1»
+	            «pair.value.prefixedName» <-- get_board_0_I«pair.key + 1»
 	        END;
 	         
 	    «ENDFOR»
 	    '''
 	}
+	
+	// =========================================================
+	// Overload da operação anterior para versão multi-máquinas
+	def generateIndividualReadImplementations(List<SimMachineDef> machines, RCPackage pkg) {
+	    if (machines.size == 1)
+	        return generateIndividualReadImplementations(machines.head)
+	
+	    // Multi-máquina: usa collectPlatformInputEntries para obter
+	    // todos os inputs físicos (Machine_1 + Machine_2 via controller)
+	    val inputs = collectPlatformInputEntries(pkg)
+		
+		//verifica a se a quantidade de inputs do modelo é compatível
+	    validateInputCount(pkg)
+	
+	    '''
+	    «FOR pair : inputs.indexed»
+	        read_«pair.value.prefixedName» =
+	        BEGIN
+	            «pair.value.prefixedName» <-- get_board_0_I«pair.key + 1»
+	        END;
+	         
+	    «ENDFOR»
+	    '''
+	}
+	
 		
 	// =========================================================
 	// Gera a operação read_model_inputs que agrega todos os inputs 
 	// da máquina de estados
-	def generateOperationReadModelInputs(SimMachineDef stm) {
-	    val inputs = stm.collectInputEntries
+	def generateOperationReadModelInputs(List<SimMachineDef> machines, RCPackage pkg) {
+	    // Single machine: usa collectInputEntries da própria máquina (comportamento atual)
+	    // Multi-machine:  usa collectPlatformInputEntries para cobrir
+	    //                 inputs físicos de todas as máquinas via controller
+	    val inputs = if (machines.size == 1)
+	                     machines.head.collectInputEntries
+	                 else
+	                     collectPlatformInputEntries(pkg)
 	    '''
 	    read_model_inputs =
 	    BEGIN	    
 	        cycle_state := st_STATE_MACHINE«IF !inputs.empty»; «ENDIF»
 	        «FOR entry : inputs SEPARATOR "; "»
-	            read_«entry.bVarName» 
+	            read_«entry.prefixedName»
 	        «ENDFOR»
 	    END;
 	    '''
@@ -1472,10 +1575,10 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    val inputs = stm.collectInputEntries
 	    '''
 	    «FOR entry : inputs»
-	        read_«entry.bVarName» =
+	        read_«entry.prefixedName» =
 	        PRE cycle_state = st_READ_INPUTS
 	        THEN
-	            «entry.bVarName» :: «entry.bType»
+	            «entry.prefixedName» :: «entry.bType»
 	        END;
 	         
 	    «ENDFOR»
@@ -1489,26 +1592,24 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	//
 	// Delivery.inputContext tem "event arrived" ->
 	//   arrived ∈ connEventNames -> filtrado -> sem read_i_arrived
-	def generateIndividualReadOperations(List<SimMachineDef> machines,
-	                                      RCPackage pkg) {
+	def generateIndividualReadOperations(List<SimMachineDef> machines, RCPackage pkg) {
 	    // Uma máquina: comportamento original preservado
 	    if (machines.size == 1)
 	        return generateIndividualReadOperations(machines.head)
 	
-	    val connEventNames = collectConnectedEvents(pkg).map[ eventName ].toSet
-	
+	    val connEventNames = collectConnectedEvents(pkg).map[ eventName ].toSet	
 	    '''
 	    «FOR stm : machines»
 	        «val filteredInputs = stm.collectInputEntries
 	                                 .filter[ !connEventNames.contains(
-	                                     bVarName.replace("i_", "")) ]
+	                                     bVarName.replace("i_", "")) ] //como se trata de filtro não escrita, não recebe prefixo
 	                                 .toList»
 	        «FOR entry : filteredInputs»
-	            read_«entry.bVarName» =
+	            read_«entry.prefixedName» =
 	            PRE cycle_state = st_READ_INPUTS
 	            THEN
-	                «entry.bVarName» :: «entry.bType»
-	            END
+	                «entry.prefixedName» :: «entry.bType»
+	            END;
 	        «ENDFOR»
 	    «ENDFOR»
 	    '''
@@ -1527,7 +1628,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	//   from = stm_ref0 (máquina) -> é conexão interna -> ignorado
 	def collectPlatformInputEntries(RCPackage pkg) {
 	    val result  = new ArrayList<InputEntry>
-	    val seen    = new HashSet<String>   // evita duplicatas
+	    val seen    = new HashSet<String>   // evita valore duplicados
 	
 	    pkg.controllers
 	       .filter(ControllerDef)
@@ -1542,13 +1643,24 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	
 	               if (isFromController) {
 	                   val eventName = conn.efrom.name
-	                   if (seen.add(eventName))   // add retorna false se já existia
-	                       result.add(new InputEntry("i_" + eventName, InputKind.EVENT))
+		               if (seen.add(eventName)) {
+					        // Resolve a máquina de destino para servir de contexto ao helper
+					        val prefix = originPrefixOf(conn.efrom)   // Sensorsl, pois obstacle vive em Sensorsl
+					        result.add(new InputEntry("i_" + eventName, InputKind.EVENT, "uint8_t", prefix))
+					   }
 	               }
 	           ]
 	       ]
 	
 	    return result
+	}
+	
+	// Overload simples para quando o evento está dentro de uma interface
+	def String originPrefixOf(EObject element) {
+	    val container = element.eContainer
+	    if (container instanceof Interface)
+	        return (container as Interface).name
+	    return null
 	}
 	
 	// =========================================================
@@ -1572,14 +1684,11 @@ class SimGenerator extends AbstractRoboSimGenerator {
    			.flatMap[ it.events ]
    			.forEach[ e |
        		   // Flag — sempre gerado, comportamento antigo intocado
-       		   entries.add(new InputEntry("i_" + e.name, InputKind.EVENT))
+       		   entries.add(new InputEntry("i_" + e.name, InputKind.EVENT, "uint8_t", originPrefixOf(e, stm)))
 
 	       	   // Valor — só quando o evento for tipado
 		       if (e.type !== null) {
-		           entries.add(new InputEntry(
-		               "i_" + e.name + "_value",
-		               InputKind.EVENT_VALUE,
-		               "uint8_t" ))
+		           entries.add(new InputEntry("i_" + e.name + "_value", InputKind.EVENT_VALUE, "uint8_t", originPrefixOf(e, stm)))
 		       }
    			]
 		
@@ -1593,10 +1702,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 			   
 			   // Valor — só quando o evento for tipado
 		       if (e.type !== null) {
-		           entries.add(new InputEntry(
-		               "i_" + e.name + "_value",
-		               InputKind.EVENT_VALUE,
-		               "uint8_t" ))
+		           entries.add(new InputEntry("i_" + e.name + "_value", InputKind.EVENT_VALUE, "uint8_t", originPrefixOf(e, stm)))
 		       }
    			]
    	
@@ -1612,14 +1718,11 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    ctx.events
 	       .forEach[ e |
 		    // Flag — sempre gerado, comportamento antigo intocado
-       		   entries.add(new InputEntry("i_" + e.name, InputKind.EVENT))
+       		   entries.add(new InputEntry("i_" + e.name, InputKind.EVENT, "uint8_t", originPrefixOf(e, stm)))
        		   
 			// Valor — só quando o evento for tipado
 		       if (e.type !== null) {
-		           entries.add(new InputEntry(
-		               "i_" + e.name + "_value",
-		               InputKind.EVENT_VALUE,
-		               "uint8_t" ))
+		           entries.add(new InputEntry("i_" + e.name + "_value", InputKind.EVENT_VALUE, "uint8_t", originPrefixOf(e, stm) ))
 		       }
    			]	
 	
@@ -1647,7 +1750,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    THEN
 	        cycle_state :: uint32_t«IF !inputs.empty» ||«ENDIF»
 	        «FOR entry : inputs SEPARATOR " ||"»
-	            «entry.bVarName» :: «entry.bType»
+	            «entry.prefixedName» :: «entry.bType»
 	        «ENDFOR»
 	    END;
 	    '''
@@ -1675,7 +1778,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    THEN
 	    cycle_state :: uint32_t«IF !inputs.empty» ||«ENDIF»
 	    «FOR entry : inputs SEPARATOR " ||"»
-	        «entry.bVarName» :: «entry.bType»
+	        «entry.prefixedName» :: «entry.bType»
 	    «ENDFOR»
 	    END;
 	    '''
@@ -1754,16 +1857,19 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	
 	            // Agrupa parâmetros da mesma operação em uma chamada
 	            case OPERATION_PARAM: {
-	                val callName = "write_o_" + entry.parentOperationName
-	                if (seenOps.add(callName))   // add retorna false se já existia
-	                    calls.add(callName)
+	                val callName = if (entry.originPrefix !== null)
+                       				   "write_" + entry.originPrefix + "_o_" + entry.parentOperationName
+				                   else
+				                       "write_o_" + entry.parentOperationName
+				    if (seenOps.add(callName))
+				        calls.add(callName)
 	            }
 	
 	            // Operação atômica, variável ou evento: chamada direta
 	            case OPERATION_ATOMIC,
 	            case VARIABLE,
 	            case EVENT:
-	                calls.add("write_" + entry.bVarName)
+	                calls.add("write_" + entry.prefixedName)
 	        }
 	    }
 	    return calls
@@ -1790,8 +1896,9 @@ class SimGenerator extends AbstractRoboSimGenerator {
 
             // $move(lv, false) -> move(SimSMovement_lv, FALSE)
             SimCall: {
-                val args = stmt.args.map[ translateArg(it, stm) ].join(", ")
-                result.add(stmt.operation.name + "(" + args + ")")
+                 val args   = stmt.args.map[ translateArg(it, stm) ].join(", ")
+				 val prefix = originPrefixOf(stmt.operation, stm)
+				 result.add(prefix + "_" + stmt.operation.name + "(" + args + ")")
             }
 			
 			// OutputCommunication -> seta flag do evento de output
@@ -1802,9 +1909,11 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	        OutputCommunication: {
 	            val ioValue  = resolveOutputCommunicationValue(stmt)
             	val eventName = stmt.event.name
-            	// Usa nome prefixado da máquina se for evento conectado
-	            val bName = connEventMap.getOrDefault(eventName, "o_" + eventName)
-	            result.add(bName + " := " + ioValue)
+            	// Evento conectado: usa nome prefixado da máquina (connEventMap).
+			    // Caso contrário: aplica o prefixo de origem (interface) -> Services_o_drop
+			    val prefix = originPrefixOf(stmt.event, stm)
+			    val bName  = connEventMap.getOrDefault(eventName, prefix + "_o_" + eventName)
+			    result.add(bName + " := " + ioValue)
 	        }
 						
 			// Assignment traduz '=' para ':='
@@ -1971,15 +2080,18 @@ class SimGenerator extends AbstractRoboSimGenerator {
             // $obstacle -> i_obstacle = IO_ON
             SimRefExp: {
                 val eventName = expr.element.name
-            	val bName     = connEventMap.getOrDefault(eventName, "i_" + eventName)
+            	val prefix = originPrefixOf(expr.element, stm)
+				val bName  = connEventMap.getOrDefault(eventName, prefix + "_i_" + eventName)
             	bName + " = IO_ON"
 			}
             // not $obstacle -> i_obstacle = IO_OFF
             Not:
             if (expr.exp instanceof SimRefExp) {
-                val eventName = (expr.exp as SimRefExp).element.name
-                val bName     = connEventMap.getOrDefault(eventName, "i_" + eventName)
-                bName + " = IO_OFF"
+                val simRef    = expr.exp as SimRefExp
+			    val eventName = simRef.element.name
+			    val prefix    = originPrefixOf(simRef.element, stm)
+			    val bName     = connEventMap.getOrDefault(eventName, prefix + "_i_" + eventName)
+			    bName + " = IO_OFF"
             } else
                 "not (" + translateCondition(expr.exp, stm, usesSinceLocal, connEventMap) + ")"
 
@@ -2042,7 +2154,8 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	        if (simRef.variable !== null) {
 	            val eventName = simRef.element.name
 	            val varName   = stm.name + "_" + simRef.variable.name
-	            actions.add(varName + " := bool(i_" + eventName + "_value = IO_ON)")
+				val prefix    = originPrefixOf(simRef.element, stm)
+				actions.add(varName + " := bool(" + prefix + "_i_" + eventName + "_value = IO_ON)")
 	        }
 	    }
 		
@@ -2348,7 +2461,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
         SM_«stm.name» =
         BEGIN
         IF SM_«stm.name»_state = INIT THEN
-         «generateInitBlock(stm, execMap, connEventMap)»
+        «generateInitBlock(stm, execMap, connEventMap)»
         «FOR entry : execMap.entrySet»
         «generateExecBlock(stm, entry.key, entry.value, execMap, connEventMap)»
         «ENDFOR»
@@ -2366,30 +2479,28 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	
 	// =========================================================
 	// Gera operações locais para cada OperationSig com parametros
-	def generateAggregateWriteLocalOperations(SimMachineDef stm) {
-		val ctx = stm.outputContext
-    	if (ctx === null) return ''
-
-    	val fromInterfaces = ctx.RInterfaces
-                           .flatMap[ it.operations ]
-                           .toList
-
-    	val direct = ctx.operations.toList
-
-	    // Filtra apenas operações COM parâmetros
-	    val opsWithParams = (fromInterfaces + direct)
-	                            .filter[ !parameters.isEmpty ]
-	                            .toList
+	def generateAggregateWriteLocalOperations(List<SimMachineDef> machines){
 	    '''
-	    «FOR op : opsWithParams»
-	    write_o_«op.name» =
-	    PRE cycle_state = st_WRITE_OUTPUTS
-	    THEN  
-	    board_0_O1  :: uint8_t ||
-	    board_0_O2  :: uint8_t ||
-	    cycle_state :: uint8_t
-	    END;
-	    «ENDFOR»
+	«FOR stm : machines»
+	    «val ctx = stm.outputContext»
+	    «IF ctx !== null»
+		    «val opsWithParams = (ctx.RInterfaces.flatMap[ it.operations ].toList
+		                            + ctx.operations.toList)
+		                                .filter[ !parameters.isEmpty ]
+		                                .toList»
+		    «FOR op : opsWithParams»
+			    «val opPrefix = originPrefixOf(op, stm)»
+			    
+			    write_«opPrefix»_o_«op.name» =
+			    PRE cycle_state = st_WRITE_OUTPUTS
+			    THEN  
+			    board_0_O1  :: uint8_t ||
+			    board_0_O2  :: uint8_t ||
+			    cycle_state :: uint8_t
+			    END;
+			    «ENDFOR»
+	    «ENDIF»
+	«ENDFOR»
 	    '''                        
 	}
 	
@@ -2400,29 +2511,27 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	// move(lv, av) -> write_o_move chama write_o_move_lv e write_o_move_av
 	// stop()       -> ignorada (sem parâmetros, já é atômica)
 	// =========================================================
-	def generateAggregateWriteOperations(SimMachineDef stm) {
-    	val ctx = stm.outputContext
-    	if (ctx === null) return ''
-
-    	val fromInterfaces = ctx.RInterfaces
-                           .flatMap[ it.operations ]
-                           .toList
-
-    	val direct = ctx.operations.toList
-
-	    // Filtra apenas operações COM parâmetros
-	    val opsWithParams = (fromInterfaces + direct)
-	                            .filter[ !parameters.isEmpty ]
-	                            .toList
+	def generateAggregateWriteOperations(List<SimMachineDef> machines) {
     	'''
-	    «FOR op : opsWithParams SEPARATOR ";"»
-	        write_o_«op.name» =
-	        BEGIN
-	        «FOR param : op.parameters SEPARATOR ";"»
-	        write_o_«op.name»_«param.name»
-	        «ENDFOR»
-	        END;
-	    «ENDFOR»
+	    «FOR stm : machines»
+	    «val ctx = stm.outputContext»
+			    «IF ctx !== null»
+			    «val opsWithParams = (ctx.RInterfaces.flatMap[ it.operations ].toList
+			    	                        + ctx.operations.toList)
+			    	                            .filter[ !parameters.isEmpty ]
+			    	                            .toList»
+
+				«FOR op : opsWithParams SEPARATOR ";"»
+					«val opPrefix = originPrefixOf(op, stm)»
+					write_«opPrefix»_o_«op.name» =
+					BEGIN
+					«FOR param : op.parameters SEPARATOR ";"»
+					write_«opPrefix»_o_«op.name»_«param.name»
+					«ENDFOR»
+					END;
+				«ENDFOR»
+			«ENDIF»
+		«ENDFOR»
 	    '''
 	}
 	
@@ -2432,9 +2541,9 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	// =========================================================
 	def generateOperations(List<OutputEntry> outputs) '''
         «FOR pair : outputs.indexed»
-            write_«pair.value.bVarName» =
+            write_«pair.value.prefixedName» =
             BEGIN
-                board_0_O«pair.key + 1» := «pair.value.bVarName»
+                board_0_O«pair.key + 1» := «pair.value.prefixedName»
             END;
             «"\n"»
         «ENDFOR»
@@ -2467,14 +2576,34 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	
 	    '''
 	    «FOR pair : platformOutputs.indexed»
-	        write_«pair.value.bVarName» =
+	        write_«pair.value.prefixedName» =
 	        BEGIN
-	            board_0_O«pair.key + 1» := «pair.value.bVarName»
+	            board_0_O«pair.key + 1» := «pair.value.prefixedName»
 	        END;
 	        «"\n"»
 	    «ENDFOR»
 	    '''
 	}
+	
+	// =========================================================
+    // Valida se o número de inputs do modelo não excede a capacidade
+    // de entradas da placa, e lança uma exceção com o erro antes de 
+    // fazer a geração do código
+    // =========================================================
+    def validateInputCount(RCPackage pkg) {
+    	
+    	val inputs = collectPlatformInputEntries(pkg)
+    	
+    	// Capacidade máxima de inputs atualmente.
+    	val int BOARD_MAX_INPUTS = 3
+    	
+	    	if (inputs.size > BOARD_MAX_INPUTS)
+	        throw new IllegalStateException(
+	            "Numero de inputs do modelo (" + inputs.size + ") " +
+	            "excede a capacidade da placa (" + BOARD_MAX_INPUTS + " pinos). " +
+	            "Inputs declarados: " + inputs.map[ bVarName ].join(", ")
+	        )
+    }
 	
 	// =========================================================
     // Valida se o número de outputs do modelo
@@ -2506,7 +2635,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	// =========================================================
 	def generateLocalOperations(List<OutputEntry> outputs) '''
         «FOR pair : outputs.indexed »
-            write_«pair.value.bVarName» =
+            write_«pair.value.prefixedName» =
             PRE cycle_state = st_WRITE_OUTPUTS
             THEN
                 «generateThenClause(pair.value, pair.key + 1)»
@@ -2556,11 +2685,11 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    val platformOutputs = machines
 	                            .flatMap[ collectOutputEntries ]
 	                            .filter[ !connEventNames.contains(
-	                                bVarName.replace("o_", "")) ]
+	                                bVarName.replace("o_", "")) ]//filtro de comparação não muda o parâmetro
 	                            .toList	
 	    '''
 	    «FOR pair : platformOutputs.indexed»
-	    write_«pair.value.bVarName» =
+	    write_«pair.value.prefixedName» =
 	    PRE cycle_state = st_WRITE_OUTPUTS
 	    THEN
 	       «generateThenClause(pair.value, pair.key + 1)»
@@ -2666,11 +2795,15 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	
 	    // Processa cada operação
 	    for (op : opsFromInterfaces + opsDirect) {
+	        val opPrefix = originPrefixOf(op, stm)
+	
 	        if (op.parameters.isEmpty) {
 	            // stop() -> o_stop (OPERATION_ATOMIC)
 	            entries.add(new OutputEntry(
 	                "o_" + op.name,
-	                OutputKind.OPERATION_ATOMIC
+	                OutputKind.OPERATION_ATOMIC,
+	                null,
+	                opPrefix
 	            ))
 	        } else {
 	            // move(lv, av) -> o_move_lv, o_move_av (OPERATION_PARAM)
@@ -2678,38 +2811,45 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	                entries.add(new OutputEntry(
 	                    "o_" + op.name + "_" + param.name,
 	                    OutputKind.OPERATION_PARAM,
-	                    op.name   // guarda a operação de origem
+	                    op.name,
+	                    opPrefix
 	                ))
 	            }
 	        }
 	    }
 	
-	    // Variaveis via interfaces requeridas
+	    // Variáveis via interfaces requeridas
 	    ctx.RInterfaces
 	       .flatMap[ it.variableList ]
 	       .flatMap[ it.vars ]
 	       .forEach[ v |
 	           entries.add(new OutputEntry(
 	               "o_" + v.name,
-	               OutputKind.VARIABLE
+	               OutputKind.VARIABLE,
+	               null,
+	               originPrefixOf(v, stm)
 	           ))
 	       ]
 	
-	    // --- Variáveis declaradas diretamente ---
+	    // Variáveis declaradas diretamente no contexto
 	    ctx.variableList
 	       .flatMap[ it.vars ]
 	       .forEach[ v |
 	           entries.add(new OutputEntry(
 	               "o_" + v.name,
-	               OutputKind.VARIABLE
+	               OutputKind.VARIABLE,
+	               null,
+	               originPrefixOf(v, stm)
 	           ))
 	       ]
 	
-	    // --- Eventos declarados diretamente ---
+	    // Eventos declarados diretamente no contexto
 	    ctx.events.forEach[ e |
 	        entries.add(new OutputEntry(
 	            "o_" + e.name,
-	            OutputKind.EVENT
+	            OutputKind.EVENT,
+	            null,
+	            originPrefixOf(e, stm)
 	        ))
 	    ]
 	
@@ -3062,19 +3202,40 @@ class BranchGuardInfo {
 // Representa um input do modelo com sua origem semântica
 class InputEntry {
 
-    public val String bVarName   // ex: i_obstacle, i_MissionStart
+    // ex: i_obstacle, i_MissionStart
+    public val String bVarName
+       
     public val InputKind kind
-	public val String bType      // "uint8_t" (flag), "BOOL", "uint32_t" (valor)
+    
+	// "uint8_t" (flag), "BOOL", "uint32_t" (valor)
+	public val String bType
+	
+	// para o novo filtro com nome da origem "Services" ou null  
+	public val String originPrefix       
+	
+	// Nome final usado nos pontos de geração.
+    // Quando há prefixo de origem: "Services_i_obstacle"
+    // Quando não há: "i_obstacle" (comportamento antigo)
+    def String prefixedName() {
+        if (originPrefix !== null) originPrefix + "_" + bVarName else bVarName
+    }	
 	
     // Construtor antigo continua existindo — default uint8_t
     new(String bVarName, InputKind kind) {
         this(bVarName, kind, "uint8_t")
     }
     
+    // Construtor com tipo explícito, sem prefixo
     new(String bVarName, InputKind kind, String bType) {
-        this.bVarName = bVarName
-        this.kind     = kind
-        this.bType    = bType
+        this(bVarName, kind, bType, null)
+    }
+    
+    // Construtor completo — com prefixo de origem
+    new(String bVarName, InputKind kind, String bType, String originPrefix) {
+        this.bVarName     = bVarName
+        this.kind         = kind
+        this.bType        = bType
+        this.originPrefix = originPrefix
     }
 }
 
@@ -3095,17 +3256,25 @@ class OutputEntry {
 
     // Nome da operação de origem, se aplicável (ex: "move" para o_move_lv)
     public val String parentOperationName
-
-    new(String bVarName, OutputKind kind) {
-        this.bVarName            = bVarName
-        this.kind                = kind
-        this.parentOperationName = null
+    
+    // para o prefixo da interface "Operations" ou null
+    public val String originPrefix          
+	
+	def String prefixedName() {
+        if (originPrefix !== null) originPrefix + "_" + bVarName else bVarName
     }
-
+	
+    new(String bVarName, OutputKind kind) {
+        this(bVarName, kind, null, null)
+    }
     new(String bVarName, OutputKind kind, String parentOperationName) {
+        this(bVarName, kind, parentOperationName, null)
+    }
+    new(String bVarName, OutputKind kind, String parentOperationName, String originPrefix) {
         this.bVarName            = bVarName
         this.kind                = kind
         this.parentOperationName = parentOperationName
+        this.originPrefix        = originPrefix
     }
 }
 
