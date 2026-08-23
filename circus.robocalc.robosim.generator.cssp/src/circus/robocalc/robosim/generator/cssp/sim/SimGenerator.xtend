@@ -173,6 +173,8 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		«generateStateVarDeclarations(machines)»
 		cycle_timer,
 		cycle_state,
+		move_count,
+		tock_made,
 		«generateConcreteVariables(machines, Logici)»
 		
 		INVARIANT 
@@ -183,6 +185,8 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		cycle_timer: uint32_t &
 		cycle_state: uint8_t &
 		cycle_state: {st_READ_INPUTS, st_STATE_MACHINE, st_WRITE_OUTPUTS, st_TIME} &
+		move_count : uint32_t &
+		tock_made : BOOL &
 		«generateInvariant(machines, Logici)»
 		
 		INITIALISATION
@@ -192,6 +196,8 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		first_time:= TRUE;
 		cycle_timer := 0;
 		cycle_state := st_READ_INPUTS;
+		move_count := 0;
+		tock_made := FALSE;
 		«generateStateVarInitialisation(machines)»
 		«generateInitialisation(machines, Logici)»
 		
@@ -246,31 +252,57 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		tock =
 		BEGIN
 		 	skip
-		END
+		END;
+		
+		exec =
+		BEGIN
+		 	skip
+		END;
+		
+		«generateResetOutputsSpec(machines, Logici)»
 		
 		OPERATIONS
 		
 		user_logic = 
 		BEGIN
 		    IF first_time = TRUE THEN 
-		       cycle_timer <-- get_ms_tick; 
+		       cycle_timer <-- get_ms_tick;
+		       tock_timer <-- get_ms_tick;
 		       execute_model_cycle;
 		       cycle_state:= st_READ_INPUTS;
 		       first_time := FALSE
 		
 		    ELSE
-		 	    VAR time_elapsed, cycle_duration IN 
+		 	    VAR time_elapsed, cycle_duration,
+		 	    time_elapsed_since_last_tock    IN
 		
 		            time_elapsed:(time_elapsed:uint32_t);
 		 	        cycle_duration:(cycle_duration:uint32_t);
+		 	        
+		 	        time_elapsed_since_last_tock:(time_elapsed_since_last_tock:uint32_t);
+		 	        
 		 		    time_elapsed <-- since(cycle_timer);
 		 		    «FOR mods : modules SEPARATOR "; \n"»cycle_duration := mul_uint32(«mods.name»_cycleDef,cycle_unit)«ENDFOR»«IF !modules.empty»;«ENDIF»
 		 		    
+		 		    time_elapsed_since_last_tock <-- since(tock_timer);
+		 		    
+		 		    IF (cycle_unit <= time_elapsed_since_last_tock ) THEN
+		 		        IF (tock_made = FALSE) THEN
+		 		            tock;
+		 		    	    tock_made := TRUE
+		 		    	ELSE
+		 		            tock_timer <-- get_ms_tick;
+		 		    	    tock_made := FALSE
+		 		    	END
+		 		    END;
+		 		    
 		 		    IF (cycle_duration <= time_elapsed) THEN
-		 		        cycle_timer <-- get_ms_tick;«"\n"»
-		 		        execute_model_cycle;«"\n"»
-		 		        cycle_state:= st_READ_INPUTS;«"\n"»
-		 		        tock
+		 		       IF (tock_made = FALSE) THEN
+		 		           exec;
+		 		           cycle_timer <-- get_ms_tick;«"\n"»
+		 		           execute_model_cycle;«"\n"»
+		 		           cycle_state:= st_READ_INPUTS«"\n"»
+		 		       END
 		 		    END
 		 		END
 		 	END
@@ -279,6 +311,7 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		«generateAllStateMachineOperations(machines, Logici)»
 		execute_model_cycle =
 		BEGIN
+		reset_outputs;
 		read_model_inputs;
 		«FOR stm : machines SEPARATOR ";\n"»SM_«stm.name»«ENDFOR»;
 		«IF machines.size > 1»controller_«getControllerName(Logici)»;«ENDIF»
@@ -338,6 +371,13 @@ class SimGenerator extends AbstractRoboSimGenerator {
 		BEGIN
 		    skip
 		END;
+		
+		exec =
+		BEGIN
+		    skip
+		END;
+		
+		«generateResetOutputsImpl(machines, Logici)»
 		
 		po <-- get_board_0_O1 =
 		BEGIN
@@ -1552,11 +1592,11 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	                     collectPlatformInputEntries(pkg)
 	    '''
 	    read_model_inputs =
-	    BEGIN	    
-	        cycle_state := st_STATE_MACHINE«IF !inputs.empty»; «ENDIF»
-	        «FOR entry : inputs SEPARATOR "; "»
-	            read_«entry.prefixedName»
-	        «ENDFOR»
+	    BEGIN
+	    	«FOR entry : inputs»
+	    	    read_«entry.prefixedName»;
+	    	«ENDFOR»	    
+	        cycle_state := st_STATE_MACHINE
 	    END;
 	    '''
 	}
@@ -1818,6 +1858,74 @@ class SimGenerator extends AbstractRoboSimGenerator {
 	    «ENDFOR»
 	    END;
 	    '''
+	}
+	
+	// =========================================================
+	// reset_outputs — LOCAL_OPERATIONS
+	// Reseta os pinos físicos da placa e as variáveis do output
+	// context das máquinas. move_count é uma variável global do
+	// tradutor (já declarada em CONCRETE_VARIABLES/INVARIANT/
+	// INITIALISATION), sem origem no modelo RoboSim.
+	// =========================================================
+	def generateResetOutputsSpec(List<OutputEntry> outputs) {
+	    val pinDecls = outputs.indexed
+	                          .map[ pair | "board_0_O" + (pair.key + 1) + " :: uint8_t" ]
+	                          .toList
+	    val varDecls = outputs.map[ prefixedName + " :: uint8_t" ].toList
+	    val allDecls = pinDecls + #["move_count :: uint32_t"] + varDecls
+	    '''
+	    reset_outputs =
+	    BEGIN
+	    «FOR decl : allDecls SEPARATOR " ||\n"»«decl»«ENDFOR»
+	    END;
+	    '''
+	}
+	
+	// Versão multi-máquina: filtra eventos conectados internamente,
+	// mesmo padrão de generateWriteModelOutputs e generateLocalOperations
+	def generateResetOutputsSpec(List<SimMachineDef> machines, RCPackage pkg) {
+	    if (machines.size == 1)
+	        return generateResetOutputsSpec(machines.head.collectOutputEntries)
+	
+	    val connEvents      = collectConnectedEvents(pkg)
+	    val connEventNames  = connEvents.map[ eventName ].toSet
+	    val platformOutputs = machines
+	                            .flatMap[ collectOutputEntries ]
+	                            .filter[ !connEventNames.contains(
+	                                bVarName.replace("o_", "")) ]
+	                            .toList
+	    generateResetOutputsSpec(platformOutputs)
+	}
+	
+	// =========================================================
+	// reset_outputs — OPERATIONS
+	// =========================================================
+	def generateResetOutputsImpl(List<OutputEntry> outputs) {
+	    val pinAssigns = outputs.indexed
+	                            .map[ pair | "board_0_O" + (pair.key + 1) + " := IO_OFF" ]
+	                            .toList
+	    val varAssigns = outputs.map[ prefixedName + " := IO_OFF" ].toList
+	    val allAssigns = pinAssigns + #["move_count := 0"] + varAssigns
+	    '''
+	    reset_outputs =
+	    BEGIN
+	    «FOR assign : allAssigns SEPARATOR ";\n"»«assign»«ENDFOR»
+	    END;
+	    '''
+	}
+	
+	def generateResetOutputsImpl(List<SimMachineDef> machines, RCPackage pkg) {
+	    if (machines.size == 1)
+	        return generateResetOutputsImpl(machines.head.collectOutputEntries)
+	
+	    val connEvents      = collectConnectedEvents(pkg)
+	    val connEventNames  = connEvents.map[ eventName ].toSet
+	    val platformOutputs = machines
+	                            .flatMap[ collectOutputEntries ]
+	                            .filter[ !connEventNames.contains(
+	                                bVarName.replace("o_", "")) ]
+	                            .toList
+	    generateResetOutputsImpl(platformOutputs)
 	}
 	
 	// =========================================================
