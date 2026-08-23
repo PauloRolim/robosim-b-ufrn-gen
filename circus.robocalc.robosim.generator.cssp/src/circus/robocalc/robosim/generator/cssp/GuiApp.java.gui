@@ -56,7 +56,7 @@ public class GuiApp extends Application {
         this.stage = stage;
         cena1 = criarCena1();
         stage.setScene(cena1);
-        stage.setTitle("Tradutor RoboSim → CSSP");
+        stage.setTitle("ProBoSim");
         stage.show();
     }
 
@@ -65,11 +65,11 @@ public class GuiApp extends Application {
     // =========================================================
     private Scene criarCena1() {
         // Linha 1: seletor de arquivo
-        Button btnSelecionar = new Button("📂 Selecionar arquivo .rst");
+        Button btnSelecionar = new Button("📂 Select RoboSim file");
         btnSelecionar.setFont(Font.font(14));
         btnSelecionar.setOnAction(e -> selecionarArquivo());
 
-        labelArquivo = new Label("Nenhum arquivo selecionado");
+        labelArquivo = new Label("No file selected");
         labelArquivo.setFont(Font.font(14));
         labelArquivo.setStyle("-fx-text-fill: gray;");
 
@@ -93,7 +93,7 @@ public class GuiApp extends Application {
         VBox.setVgrow(scrollMaquinas, Priority.ALWAYS);
 
         // Botão Traduzir (alinhado à direita) -- Alteração NOVA
-        btnTraduzir = new Button("▶ Traduzir");
+        btnTraduzir = new Button("▶ Translate");
         btnTraduzir.setFont(Font.font(14));
         btnTraduzir.setStyle("-fx-font-weight: bold;");
         btnTraduzir.setDisable(true);
@@ -116,9 +116,9 @@ public class GuiApp extends Application {
 
     private void selecionarArquivo() {
         FileChooser fc = new FileChooser();
-        fc.setTitle("Selecionar arquivo RoboSim");
+        fc.setTitle("Select RoboSim file");
         fc.getExtensionFilters().add(
-            new FileChooser.ExtensionFilter("Arquivos RoboSim (*.rst)", "*.rst")
+            new FileChooser.ExtensionFilter("RoboSim Files (*.rst)", "*.rst")
         );
         File f = fc.showOpenDialog(stage);
         if (f != null) {
@@ -138,7 +138,7 @@ public class GuiApp extends Application {
         //btnProximo.setDisable(true);
 
         // Mostra "carregando"
-        labelStatus.setText("⏳ Carregando máquinas...");
+        labelStatus.setText("⏳ Loading machines...");
         labelStatus.setStyle("-fx-text-fill: gray;");
         labelStatus.setVisible(true);
         labelStatus.setManaged(true);
@@ -151,7 +151,7 @@ public class GuiApp extends Application {
                 labelStatus.setManaged(false);
 
                 if (maquinas.isEmpty()) {
-                    labelStatus.setText("❌ Nenhuma máquina de estados encontrada no modelo.");
+                    labelStatus.setText("❌ No state machines found in the model.");
                     labelStatus.setStyle("-fx-text-fill: red;");
                     labelStatus.setVisible(true);
                     labelStatus.setManaged(true);
@@ -165,7 +165,7 @@ public class GuiApp extends Application {
 
     private void popularCheckboxes(List<String> maquinas) {
         // Checkbox mestre "Todas as máquinas"
-        checkTodas = new CheckBox("Todas as máquinas");
+        checkTodas = new CheckBox("All machines");
         checkTodas.setFont(Font.font(null, FontWeight.BOLD, 14));
         checkTodas.setSelected(true);
         checkTodas.setAllowIndeterminate(false); // só código seta indeterminate
@@ -233,11 +233,11 @@ public class GuiApp extends Application {
     // TELA 2 — Tradução e mensagens
     // =========================================================
     private Scene criarCena2() {
-        Button btnVoltar = new Button("← Voltar");
+        Button btnVoltar = new Button("← Back");
         btnVoltar.setFont(Font.font(14));
         btnVoltar.setOnAction(e -> stage.setScene(cena1));
 
-        //btnTraduzir = new Button("▶ Traduzir");
+        //btnTraduzir = new Button("▶ Translate");
         //btnTraduzir.setFont(Font.font(14));
         //btnTraduzir.setStyle("-fx-font-weight: bold;");
         //btnTraduzir.setOnAction(e -> executarTraducao());
@@ -248,7 +248,7 @@ public class GuiApp extends Application {
         areaSaida = new TextArea();
         areaSaida.setEditable(false);
         areaSaida.setFont(Font.font("Consolas", 13));
-        areaSaida.setPromptText("As mensagens de progresso aparecerão aqui...");
+        areaSaida.setPromptText("Progress messages will appear here...");
         VBox.setVgrow(areaSaida, Priority.ALWAYS);
 
         VBox root = new VBox(16, topo, areaSaida);
@@ -272,11 +272,12 @@ public class GuiApp extends Application {
                 ? null : selecionadas;
 
         if (filtro == null) {
-            areaSaida.appendText("Iniciando tradução de TODAS as máquinas de: "
-                    + arquivoSelecionado.getName() + "\n\n");
+           areaSaida.appendText("Starting translation of ALL machines from: "
+        			+ arquivoSelecionado.getName() + "\n\n");
+
         } else {
-            areaSaida.appendText("Iniciando tradução de " + filtro
-                    + " em: " + arquivoSelecionado.getName() + "\n\n");
+            areaSaida.appendText("Starting translation of " + filtro
+        			+ " from: " + arquivoSelecionado.getName() + "\n\n");
         }
 
         File pastaSaida = new File(arquivoSelecionado.getParentFile(), "cssp-gen/sim");

@@ -44,7 +44,7 @@ public class TraductorService {
         "lib/robosim/score.rst"
     };
 
-    // Injector cacheado: inicialização Xtext ocorre só uma vez por instância
+    // Injector com cache: inicialização Xtext ocorre só uma vez por instância
     private Injector injector;
 
     public static class Resultado {
@@ -75,7 +75,7 @@ public class TraductorService {
             if (log != null) log.accept(msg);
         };
         try {
-            registrar.accept("→ Analisando modelo para listar máquinas...");
+            registrar.accept("→ Analyzing model to list machines...");
             Resource resource = prepararResource(inputFile, registrar);
 
             List<String> nomes = new ArrayList<>();
@@ -89,10 +89,10 @@ public class TraductorService {
                     }
                 }
             }
-            registrar.accept("→ " + nomes.size() + " máquina(s) encontrada(s): " + nomes);
+            registrar.accept("→ " + nomes.size() + " machine(s) found: " + nomes);
             return nomes;
         } catch (Exception e) {
-            registrar.accept("\n❌ Erro ao listar máquinas: " + e.getMessage());
+            registrar.accept("\n❌ Error listing machines: " + e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -133,7 +133,7 @@ public class TraductorService {
             Resource resource = prepararResource(inputFile, registrar);
 
             // 2. Valida (uma vez só)
-            registrar.accept("→ Validando modelo...");
+            registrar.accept("→ Validating model...");
             if (!validarResource(resource, registrar)) {
                 return new Resultado(false, mensagens, null);
             }
@@ -145,34 +145,34 @@ public class TraductorService {
             fsa.setOutputPath(outputDir.getAbsolutePath());
             generator = getInjector().getInstance(SimGenerator.class);
 
-            registrar.accept("→ Gerando saída em " + outputDir.getAbsolutePath() + "...");
+            registrar.accept("→ Generating output in " + outputDir.getAbsolutePath() + "...");
 
             // 4. Gera — 1 chamada por máquina selecionada
             if (maquinas == null || maquinas.isEmpty()) {
-                registrar.accept("→ Filtro: todas as máquinas");
+                registrar.accept("→ Filter: all machines");
                 generator.setSelectedMachine(null);
                 generator.doGenerate(resource, fsa, new GeneratorContext());
 
             } else if (maquinas.size() == 1) {
                 String m = maquinas.get(0);
-                registrar.accept("→ Filtro: apenas máquina '" + m + "'");
+                registrar.accept("→ Filter: only machine '" + m + "'");
                 generator.setSelectedMachine(m);
                 generator.doGenerate(resource, fsa, new GeneratorContext());
 
             } else {
-                registrar.accept("→ Filtro: " + maquinas.size() + " máquinas selecionadas");
+                registrar.accept("→ Filter: " + maquinas.size() + " machines selected");
                 for (String m : maquinas) {
-                    registrar.accept("   ↳ Gerando '" + m + "'...");
+                    registrar.accept("   ↳ Generating '" + m + "'...");
                     generator.setSelectedMachine(m);
                     generator.doGenerate(resource, fsa, new GeneratorContext());
                 }
             }
 
-            registrar.accept("\n✅ Tradução concluída!");
+            registrar.accept("\n✅ Translation complete!");
             return new Resultado(true, mensagens, outputDir);
 
         } catch (Exception e) {
-            registrar.accept("\n❌ Erro: " + e.getMessage());
+            registrar.accept("\n❌ Error: " + e.getMessage());
             StringBuilder sb = new StringBuilder();
             for (StackTraceElement st : e.getStackTrace()) {
                 sb.append("   at ").append(st).append("\n");
@@ -200,16 +200,16 @@ public class TraductorService {
 
         boolean hasErrors = false;
         for (Issue issue : issues) {
-            String linha = "   [" + issue.getSeverity() + "] linha "
+            String linha = "   [" + issue.getSeverity() + "] line "
                     + issue.getLineNumber() + ": " + issue.getMessage();
             registrar.accept(linha);
             if (issue.getSeverity() == Severity.ERROR) hasErrors = true;
         }
         if (issues.isEmpty()) {
-            registrar.accept("   (sem problemas)");
+            registrar.accept("   (no issues)");
         }
         if (hasErrors) {
-            registrar.accept("\n❌ Modelo contém erros de validação. Geração cancelada.");
+            registrar.accept("\n❌ The model contains validation errors. Generation cancelled..");
             return false;
         }
         return true;
@@ -255,7 +255,7 @@ public class TraductorService {
         try (InputStream in = TraductorService.class.getClassLoader()
                 .getResourceAsStream(resourcePath)) {
             if (in == null) {
-                throw new IOException("Recurso não encontrado: " + resourcePath);
+                throw new IOException("Resource not found: " + resourcePath);
             }
             Path target = destDir.resolve(resourcePath);
             Files.createDirectories(target.getParent());
